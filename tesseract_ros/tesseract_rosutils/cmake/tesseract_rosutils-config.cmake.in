@@ -11,6 +11,6 @@ find_dependency(tesseract_scene_graph)
 find_dependency(tesseract_common)
 find_dependency(tesseract_visualization)
 find_dependency(tesseract_collision)
-find_dependency(tesseract_process_planners)
+find_dependency(tesseract_motion_planners)
 
 include("${CMAKE_CURRENT_LIST_DIR}/@PROJECT_NAME@-targets.cmake")

@@ -15,7 +15,7 @@ find_package(tesseract_geometry REQUIRED) # This should not be required, must be
 find_package(tesseract_visualization REQUIRED)
 find_package(tesseract_collision REQUIRED)
 find_package(tesseract_common REQUIRED)
-find_package(tesseract_process_planners REQUIRED)
+find_package(tesseract_motion_planners REQUIRED)
 find_package(visualization_msgs REQUIRED)
 
 list(FIND CMAKE_CXX_COMPILE_FEATURES cxx_std_17 CXX_FEATURE_FOUND)
@@ -27,7 +27,7 @@ target_link_libraries(${PROJECT_NAME} INTERFACE
     tesseract::tesseract_collision_core
     tesseract::tesseract_visualization
     tesseract::tesseract_common
-    tesseract::tesseract_process_planners
+    tesseract::tesseract_motion_planners_core
     Eigen3::Eigen
     ${rclcpp_LIBRARIES}
     ${tesseract_msgs_LIBRARIES}
@@ -67,7 +67,7 @@ ament_export_dependencies(
     tesseract_visualization
     tesseract_collision
     tesseract_common
-    tesseract_process_planners
+    tesseract_motion_planners
     )
 
 ament_export_include_directories(
