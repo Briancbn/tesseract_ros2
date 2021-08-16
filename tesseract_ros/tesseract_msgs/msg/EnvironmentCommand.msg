@@ -1,5 +1,5 @@
 # Possible Commands
-uint8 ADD=0
+uint8 ADD_LINK=0
 uint8 MOVE_LINK=1
 uint8 MOVE_JOINT=2
 uint8 REMOVE_LINK=3
@@ -12,6 +12,13 @@ uint8 ADD_ALLOWED_COLLISION=9
 uint8 REMOVE_ALLOWED_COLLISION=10
 uint8 REMOVE_ALLOWED_COLLISION_LINK=11
 uint8 UPDATE_JOINT_STATE=12
+uint8 ADD_SCENE_GRAPH=13
+uint8 CHANGE_JOINT_POSITION_LIMITS=14
+uint8 CHANGE_JOINT_VELOCITY_LIMITS=15
+uint8 CHANGE_JOINT_ACCELERATION_LIMITS=16
+uint8 ADD_KINEMATICS_INFORMATION=17
+uint8 REPLACE_JOINT=18
+uint8 CHANGE_COLLISION_MARGINS=19
 
 # Specifies the type of command. Dictates which of the fields below are used
 uint8 command
@@ -19,6 +26,7 @@ uint8 command
 # ADD - Adds a link and the associated joint to the environment
 tesseract_msgs/Link add_link
 tesseract_msgs/Joint add_joint
+bool add_replace_allowed
 
 # MOVE_LINK - Changes the joint associated with the link
 tesseract_msgs/Joint move_link_joint
@@ -32,6 +40,9 @@ string remove_link
 
 # REMOVE_JOINT - Removes the joint from the environment
 string remove_joint
+
+# REPLACE_JOINT - Replace the joint in the environment
+tesseract_msgs/Joint replace_joint
 
 # CHANGE_LINK_ORIGIN - Changes the origin of the link
 string change_link_origin_name
@@ -60,3 +71,24 @@ string remove_allowed_collision_link
 
 # UPDATE_JOINT_STATE
 sensor_msgs/JointState joint_state
+
+# ADD_SCENE_GRAPH Command
+tesseract_msgs/SceneGraph scene_graph
+tesseract_msgs/Joint scene_graph_joint
+string scene_graph_prefix
+
+# CHANGE_JOINT_POSITION_LIMITS Command
+tesseract_msgs/StringLimitsPair[] change_joint_position_limits
+
+# CHANGE_JOINT_VELOCITY_LIMITS Command
+tesseract_msgs/StringDoublePair[] change_joint_velocity_limits
+
+# CHANGE_JOINT_ACCELERATION_LIMITS Command
+tesseract_msgs/StringDoublePair[] change_joint_acceleration_limits
+
+# ADD_KINEMATICS_INFORMATION Command
+tesseract_msgs/KinematicsInformation add_kinematics_information
+
+# CHANGE_COLLISION_MARGINS
+tesseract_msgs/CollisionMarginData collision_margin_data
+tesseract_msgs/CollisionMarginOverrideType collision_margin_override_type

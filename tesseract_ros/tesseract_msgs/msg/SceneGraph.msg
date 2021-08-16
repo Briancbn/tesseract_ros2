@@ -1,8 +1,10 @@
-# Message containing all information necessary to recreate a Tesseract Scene Graph
-string graph_name
-string graph_root
+string id # Scene Graph Name
+string root # Root Link Name
 
-tesseract_msgs/Link[] link_list
-tesseract_msgs/Joint[] joint_list
+tesseract_msgs/Link[] links
+tesseract_msgs/Joint[] joints
 
-tesseract_msgs/AllowedCollisionEntry[] acm
+string[] invisible_links # List of links which are hidden
+string[] disabled_collision_links # List of links which have collision disabled
+
+tesseract_msgs/AllowedCollisionEntry[] acm # The allowed collision matrix
