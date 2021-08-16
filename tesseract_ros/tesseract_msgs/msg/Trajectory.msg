@@ -1,5 +1,11 @@
-TesseractState tesseract_state
+# Header
+std_msgs/Header header
 
-trajectory_msgs/JointTrajectory joint_trajectory
+Environment environment # (Optional) Override the existing Tesseract Environment
+tesseract_msgs/EnvironmentCommand[] commands # (Optional) Additional Commands to be applied to environment prior to trajectory visualization
 
-trajectory_msgs/MultiDOFJointTrajectory multi_dof_joint_trajectory
+# Tesseract Command Language Instructions
+string instructions
+
+# If instructions are provided this will be ignored
+tesseract_msgs/JointState[] joint_trajectory
