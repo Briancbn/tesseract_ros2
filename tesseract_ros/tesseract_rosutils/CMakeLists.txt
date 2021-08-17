@@ -6,53 +6,68 @@ find_package(rclcpp REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(tesseract_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+
+#find_package(tf2 REQUIRED)
+#find_package(tf2_ros REQUIRED)
 find_package(tf2_eigen REQUIRED)
 
 # Non-ROS packages
 find_package(Eigen3 REQUIRED)
+find_package(tesseract_environment REQUIRED)
 find_package(tesseract_scene_graph REQUIRED)
-find_package(tesseract_geometry REQUIRED) # This should not be required, must be doing something wrong when creating targets
+find_package(tesseract_srdf REQUIRED)
 find_package(tesseract_visualization REQUIRED)
+find_package(tesseract_geometry REQUIRED) # This should not be required, must be doing something wrong when creating targets
 find_package(tesseract_collision REQUIRED)
+find_package(tesseract_visualization REQUIRED)
 find_package(tesseract_common REQUIRED)
 find_package(tesseract_motion_planners REQUIRED)
+find_package(tesseract_process_managers REQUIRED)
 find_package(visualization_msgs REQUIRED)
 
 list(FIND CMAKE_CXX_COMPILE_FEATURES cxx_std_17 CXX_FEATURE_FOUND)
 
-add_library(${PROJECT_NAME} INTERFACE)
-target_link_libraries(${PROJECT_NAME} INTERFACE
+add_library(${PROJECT_NAME} SHARED src/plotting.cpp src/conversions.cpp src/utils.cpp)
+target_link_libraries(${PROJECT_NAME} PUBLIC
+    tesseract::tesseract_environment_core
+    tesseract::tesseract_environment_ofkt
     tesseract::tesseract_scene_graph
+    tesseract::tesseract_srdf
     tesseract::tesseract_geometry
     tesseract::tesseract_collision_core
     tesseract::tesseract_visualization
     tesseract::tesseract_common
     tesseract::tesseract_motion_planners_core
-    Eigen3::Eigen
+    tesseract::tesseract_process_managers
+    tesseract::tesseract_command_language
+    #Eigen3::Eigen
     ${rclcpp_LIBRARIES}
-    ${tesseract_msgs_LIBRARIES}
-    ${geometry_msgs_LIBRARIES}
+    #${tesseract_msgs_LIBRARIES}
+    #${geometry_msgs_LIBRARIES}
     ${ament_index_cpp_LIBRARIES}
-    ${tf2_eigen_LIBRARIES}
-    ${visualization_msgs_LIBRARIES}
+    #${tf2_eigen_LIBRARIES}
+    #${tf2_LIBRARIES}
+    #${tf2_ros_LIBRARIES}
+    #${visualization_msgs_LIBRARIES}
+    ${Boost_LIBRARIES}
     )
-target_compile_options(${PROJECT_NAME} INTERFACE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
+
+target_compile_options(${PROJECT_NAME} PRIVATE ${TESSERACT_COMPILE_OPTIONS})
+#target_compile_options(${PROJECT_NAME} INTERFACE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
 if(CXX_FEATURE_FOUND EQUAL "-1")
-    target_compile_options(${PROJECT_NAME} INTERFACE -std=c++17)
+    target_compile_options(${PROJECT_NAME} PUBLIC -std=c++17)
 else()
-    target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_17)
+    target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 endif()
-target_include_directories(${PROJECT_NAME} INTERFACE
+target_include_directories(${PROJECT_NAME} PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     "$<INSTALL_INTERFACE:include>"
     )
-target_include_directories(${PROJECT_NAME} SYSTEM INTERFACE
+target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC
     ${rclcpp_INCLUDE_DIRS}
+    ${EIGEN3_INCLUDE_DIRS}
+    ${Boost_INCLUDE_DIRS}
     ${tesseract_msgs_INCLUDE_DIRS}
-    ${ament_index_cpp_INCLUDE_DIRS}
-    ${tf2_eigen_INCLUDE_DIRS}
-    ${geometry_msgs_INCLUDE_DIRS}
-
     )
 
 list (APPEND PACKAGE_LIBRARIES ${PROJECT_NAME})
@@ -62,12 +77,16 @@ ament_export_dependencies(
     tesseract_msgs
     visualization_msgs
     rclcpp
+    tesseract_environment
     tesseract_scene_graph
+    tesseract_srdf
     tesseract_geometry
-    tesseract_visualization
     tesseract_collision
+    tesseract_visualization
     tesseract_common
     tesseract_motion_planners
+    tesseract_process_managers
+    tesseract_command_language
     )
 
 ament_export_include_directories(
@@ -109,14 +128,14 @@ if(BUILD_TESTING)
   find_package(GTest REQUIRED)
   find_package(tesseract_support REQUIRED)
 
-  ament_add_gtest(${PROJECT_NAME}_unit test/tesseract_rosutils_unit.cpp)
-  target_link_libraries(${PROJECT_NAME}_unit GTest::GTest GTest::Main tesseract::tesseract_support ${PROJECT_NAME})
-	if(CXX_FEATURE_FOUND EQUAL "-1")
-            target_compile_options(${PROJECT_NAME}_unit PRIVATE -std=c++17)
-	else()
-            target_compile_features(${PROJECT_NAME}_unit PRIVATE cxx_std_17)
-	endif()
-  target_include_directories(${PROJECT_NAME}_unit PRIVATE
-      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-      "$<INSTALL_INTERFACE:include>")
+#  ament_add_gtest(${PROJECT_NAME}_unit test/tesseract_rosutils_unit.cpp)
+#  target_link_libraries(${PROJECT_NAME}_unit GTest::GTest GTest::Main tesseract::tesseract_support ${PROJECT_NAME})
+#	if(CXX_FEATURE_FOUND EQUAL "-1")
+#            target_compile_options(${PROJECT_NAME}_unit PRIVATE -std=c++17)
+#	else()
+#            target_compile_features(${PROJECT_NAME}_unit PRIVATE cxx_std_17)
+#	endif()
+#  target_include_directories(${PROJECT_NAME}_unit PRIVATE
+#      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+#      "$<INSTALL_INTERFACE:include>")
 endif()
