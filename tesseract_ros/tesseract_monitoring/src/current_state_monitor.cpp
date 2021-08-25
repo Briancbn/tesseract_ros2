@@ -38,6 +38,7 @@
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <rclcpp/rclcpp.hpp>
 #include <limits>
+#include <chrono>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <tf2_eigen/tf2_eigen.h>
@@ -53,50 +54,46 @@ using std::placeholders::_2;
 
 namespace tesseract_monitoring
 {
-// CurrentStateMonitor::CurrentStateMonitor(const tesseract_environment::Environment::ConstPtr& env,
-//                                         const tesseract::ForwardKinematicsManager::ConstPtr& kinematics_manager)
-//  : CurrentStateMonitor(env, kinematics_manager, std::make_shared<rclcpp::Node>("current_state_monitor"))
-//{
-//}
+  CurrentStateMonitor::CurrentStateMonitor(const tesseract_environment::Environment::ConstPtr& env)
+    : CurrentStateMonitor(env, std::make_shared<rclcpp::Node>("tesseract_monitor"))
+  {
+  }
 
 CurrentStateMonitor::CurrentStateMonitor(const tesseract_environment::Environment::ConstPtr& env,
-                                         const tesseract::ForwardKinematicsManager::ConstPtr& kinematics_manager,
                                          rclcpp::Node::SharedPtr node)
   : node_(node)
   , env_(env)
   , env_state_(*env->getCurrentState())
   , last_environment_revision_(env_->getRevision())
-  , kinematics_manager_(kinematics_manager)
   , state_monitor_started_(false)
   , copy_dynamics_(false)
   , error_(std::numeric_limits<double>::epsilon())
-  , tf_broadcaster_(node_)
+  , tf_broadcaster_(std::make_shared<tf2_ros::TransformBroadcaster>(this))
 {
 }
 
 CurrentStateMonitor::~CurrentStateMonitor() { stopStateMonitor(); }
 tesseract_environment::EnvState::Ptr CurrentStateMonitor::getCurrentState() const
 {
-  boost::mutex::scoped_lock slock(state_update_lock_);
+  std::scoped_lock slock(state_update_lock_);
   return std::make_shared<tesseract_environment::EnvState>(env_state_);
 }
 
 rclcpp::Time CurrentStateMonitor::getCurrentStateTime() const
 {
-  boost::mutex::scoped_lock slock(state_update_lock_);
+  std::scoped_lock slock(state_update_lock_);
   return current_state_time_;
 }
 
 std::pair<tesseract_environment::EnvState::Ptr, rclcpp::Time> CurrentStateMonitor::getCurrentStateAndTime() const
 {
-  boost::mutex::scoped_lock slock(state_update_lock_);
+  std::scoped_lock slock(state_update_lock_);
   return std::make_pair(std::make_shared<tesseract_environment::EnvState>(env_state_), current_state_time_);
 }
 
 std::unordered_map<std::string, double> CurrentStateMonitor::getCurrentStateValues() const
 {
-  std::map<std::string, double> m;
-  boost::mutex::scoped_lock slock(state_update_lock_);
+  std::scoped_lock slock(state_update_lock_);
   return env_state_.joints;
 }
 
@@ -107,21 +104,22 @@ void CurrentStateMonitor::addUpdateCallback(const JointStateUpdateCallback& fn)
 }
 
 void CurrentStateMonitor::clearUpdateCallbacks() { update_callbacks_.clear(); }
-void CurrentStateMonitor::startStateMonitor(const std::string& joint_states_topic)
+void CurrentStateMonitor::startStateMonitor(const std::string& joint_states_topic, bool publish_tf)
 {
+  publish_tf_ = publish_tf;
   if (!state_monitor_started_ && env_)
   {
     joint_time_.clear();
     if (joint_states_topic.empty())
-      RCLCPP_ERROR(node_->get_logger(), "The joint states topic cannot be an empty string");
+      RCLCPP_ERROR(node_->get_logger(),"The joint states topic cannot be an empty string");
     else
     {
       joint_state_subscriber_ = node_->create_subscription<sensor_msgs::msg::JointState>(
-          joint_states_topic, 25, std::bind(&CurrentStateMonitor::jointStateCallback, this, std::placeholders::_1));
+          joint_states_topic, 1, std::bind(&tesseract_monitoring::CurrentStateMonitor::jointStateCallback, this, std::placeholders::_1));
     }
     state_monitor_started_ = true;
     monitor_start_time_ = node_->now();
-    //    ROS_DEBUG("Listening to joint states on topic '%s'", nh_.resolveName(joint_states_topic).c_str());
+    RCLCPP_ERROR(node_->get_logger(),"Listening to joint states on topic '%s'", joint_states_topic.c_str()/*nh_.resolveName(joint_states_topic).c_str()*/);
   }
 }
 
@@ -131,7 +129,7 @@ void CurrentStateMonitor::stopStateMonitor()
   if (state_monitor_started_)
   {
     joint_state_subscriber_.reset();  // BUG Joe: Right way to do this>
-    RCLCPP_DEBUG(node_->get_logger(), "No longer listening o joint states");
+    RCLCPP_DEBUG(node_->get_logger(),"No longer listening to joint states");
     state_monitor_started_ = false;
   }
 }
@@ -140,8 +138,8 @@ std::string CurrentStateMonitor::getMonitoredTopic() const
 {
   if (joint_state_subscriber_)
     return joint_state_subscriber_->get_topic_name();
-  else
-    return "";
+
+  return "";
 }
 
 bool CurrentStateMonitor::isPassiveOrMimicDOF(const std::string& /*dof*/) const
@@ -173,28 +171,29 @@ bool CurrentStateMonitor::isPassiveOrMimicDOF(const std::string& /*dof*/) const
 bool CurrentStateMonitor::haveCompleteState() const
 {
   bool result = true;
-  boost::mutex::scoped_lock slock(state_update_lock_);
+  std::scoped_lock slock(state_update_lock_);
   for (const auto& joint : env_state_.joints)
     if (joint_time_.find(joint.first) == joint_time_.end())
     {
       if (!isPassiveOrMimicDOF(joint.first))
       {
-        RCLCPP_DEBUG(node_->get_logger(), "Joint variable '%s' has never been updated", joint.first.c_str());
+        RCLCPP_DEBUG(node_->get_logger(),"Joint variable '%s' has never been updated", joint.first.c_str());
         result = false;
       }
     }
   return result;
 }
 
-bool CurrentStateMonitor::haveCompleteState(std::vector<std::string>& missing_states) const
+bool CurrentStateMonitor::haveCompleteState(std::vector<std::string>& missing_joints) const
 {
   bool result = true;
-  boost::mutex::scoped_lock slock(state_update_lock_);
+  std::scoped_lock slock(state_update_lock_);
   for (const auto& joint : env_state_.joints)
     if (joint_time_.find(joint.first) == joint_time_.end())
       if (!isPassiveOrMimicDOF(joint.first))
       {
-        missing_states.push_back(joint.first);
+        RCLCPP_DEBUG(node_->get_logger(),"Joint variable '%s' has never been updated", joint.first.c_str());
+        missing_joints.push_back(joint.first);
         result = false;
       }
   return result;
@@ -203,27 +202,26 @@ bool CurrentStateMonitor::haveCompleteState(std::vector<std::string>& missing_st
 bool CurrentStateMonitor::haveCompleteState(const rclcpp::Duration& age) const
 {
   bool result = true;
-  rclcpp::Time now = node_->now();
+  rclcpp::Time now = node_->now();    //rclcpp::Time::now();
   rclcpp::Time old = now - age;
-  boost::mutex::scoped_lock slock(state_update_lock_);
+  std::scoped_lock slock(state_update_lock_);
   for (const auto& joint : env_state_.joints)
   {
     if (isPassiveOrMimicDOF(joint.first))
       continue;
-    std::map<std::string, rclcpp::Time>::const_iterator it = joint_time_.find(joint.first);
+    auto it = joint_time_.find(joint.first);
     if (it == joint_time_.end())
     {
-      RCLCPP_DEBUG(node_->get_logger(), "Joint variable '%s' has never been updated", joint.first.c_str());
+      RCLCPP_DEBUG(node_->get_logger(),"Joint variable '%s' has never been updated", joint.first.c_str());
       result = false;
     }
     else if (it->second < old)
     {
-      RCLCPP_DEBUG(node_->get_logger(),
-                   "Joint variable '%s' was last updated %0.3lf seconds ago "
-                   "(older than the allowed %0.3lf seconds)",
-                   joint.first.c_str(),
-                   (now - it->second).seconds(),
-                   age.seconds());
+      RCLCPP_DEBUG(node_->get_logger(),"Joint variable '%s' was last updated %0.3lf seconds ago "
+                "(older than the allowed %0.3lf seconds)",
+                joint.first.c_str(),
+                (now - it->second).seconds(),
+                age.seconds());
       result = false;
     }
   }
@@ -235,27 +233,26 @@ bool CurrentStateMonitor::haveCompleteState(const rclcpp::Duration& age, std::ve
   bool result = true;
   rclcpp::Time now = node_->now();
   rclcpp::Time old = now - age;
-  boost::mutex::scoped_lock slock(state_update_lock_);
+  std::scoped_lock slock(state_update_lock_);
 
   for (const auto& joint : env_state_.joints)
   {
     if (isPassiveOrMimicDOF(joint.first))
       continue;
-    std::map<std::string, rclcpp::Time>::const_iterator it = joint_time_.find(joint.first);
+    auto it = joint_time_.find(joint.first);
     if (it == joint_time_.end())
     {
-      RCLCPP_DEBUG(node_->get_logger(), "Joint variable '%s' has never been updated", joint.first.c_str());
+      RCLCPP_DEBUG(node_->get_logger(),"Joint variable '%s' has never been updated", joint.first.c_str());
       missing_states.push_back(joint.first);
       result = false;
     }
     else if (it->second < old)
     {
-      RCLCPP_DEBUG(node_->get_logger(),
-                   "Joint variable '%s' was last updated %0.3lf seconds ago "
-                   "(older than the allowed %0.3lf seconds)",
-                   joint.first.c_str(),
-                   (now - it->second).seconds(),
-                   age.seconds());
+      RCLCPP_DEBUG(node_->get_logger(),"Joint variable '%s' was last updated %0.3lf seconds ago "
+                "(older than the allowed %0.3lf seconds)",
+                joint.first.c_str(),
+                (now - it->second).seconds(),
+                age.seconds());
       missing_states.push_back(joint.first);
       result = false;
     }
@@ -267,12 +264,12 @@ bool CurrentStateMonitor::waitForCurrentState(const rclcpp::Time t, double wait_
 {
   rclcpp::Time start = node_->now();
   rclcpp::Duration elapsed(0, 0);
-  rclcpp::Duration timeout(wait_time);
+  rclcpp::Duration timeout(wait_time,0);
 
-  boost::mutex::scoped_lock slock(state_update_lock_);
+  std::unique_lock slock(state_update_lock_);
   while (current_state_time_ < t)
   {
-    state_update_condition_.wait_for(slock, boost::chrono::nanoseconds((timeout - elapsed).nanoseconds()));
+    state_update_condition_.wait_for(slock, std::chrono::nanoseconds((timeout - elapsed).nanoseconds()));
     elapsed = node_->now() - start;
     if (elapsed > timeout)
       return false;
@@ -280,14 +277,15 @@ bool CurrentStateMonitor::waitForCurrentState(const rclcpp::Time t, double wait_
   return true;
 }
 
+
 bool CurrentStateMonitor::waitForCompleteState(double wait_time) const
 {
   double slept_time = 0.0;
   double sleep_step_s = std::min(0.05, wait_time / 10.0);
+  rclcpp::WallRate sleep_step(sleep_step_s);
   while (!haveCompleteState() && slept_time < wait_time)
   {
-    rclcpp::sleep_for(std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::duration<double>(sleep_step_s)));  // TODO Joe: this seems unnecessarily clunky
+    sleep_step.sleep();
     slept_time += sleep_step_s;
   }
   return haveCompleteState();
@@ -304,7 +302,7 @@ bool CurrentStateMonitor::waitForCompleteState(const std::string& manip, double 
   std::vector<std::string> missing_joints;
   if (!haveCompleteState(missing_joints))
   {
-    const tesseract_kinematics::ForwardKinematics::ConstPtr& jmg = kinematics_manager_->getFwdKinematicSolver(manip);
+    tesseract_kinematics::ForwardKinematics::ConstPtr jmg = env_->getManipulatorManager()->getFwdKinematicSolver(manip);
     if (jmg)
     {
       std::set<std::string> mj;
@@ -325,15 +323,16 @@ void CurrentStateMonitor::jointStateCallback(const sensor_msgs::msg::JointState:
 {
   if (joint_state->name.size() != joint_state->position.size())
   {
-    RCLCPP_ERROR_ONCE(node_->get_logger(),
-                      "State monitor received invalid joint state (number of joint names does not match number of "
-                      "positions)");
+    RCLCPP_ERROR(node_->get_logger(),
+                       "State monitor received invalid joint state (number "
+                       "of joint names does not match number of "
+                       "positions)");
     return;
   }
   bool update = false;
 
   {
-    boost::mutex::scoped_lock slock(state_update_lock_);
+    std::scoped_lock slock(state_update_lock_);
     // read the received values, and update their time stamps
     current_state_time_ = joint_state->header.stamp;
     if (last_environment_revision_ != env_->getRevision())
@@ -352,51 +351,380 @@ void CurrentStateMonitor::jointStateCallback(const sensor_msgs::msg::JointState:
           env_state_.joints[joint_state->name[i]] = joint_state->position[i];
           update = true;
         }
+        joint_time_[joint_state->name[i]] = joint_state->header.stamp;
       }
     }
 
     if (update)
       env_state_ = tesseract_environment::EnvState(*(env_->getState(env_state_.joints)));
 
-    std::string base_link = env_->getRootLinkName();
-    std::vector<geometry_msgs::msg::TransformStamped> transforms;
-    transforms.reserve(env_state_.joints.size());
-    for (const auto& pose : env_state_.link_transforms)
+    if (publish_tf_)
     {
-      if (pose.first != base_link)
+      std::string base_link = env_->getRootLinkName();
+      std::vector<geometry_msgs::msg::TransformStamped> transforms;
+      transforms.reserve(env_state_.joints.size());
+      for (const auto& pose : env_state_.link_transforms)
       {
-        geometry_msgs::msg::TransformStamped tf;  // TODO Joe: should be implemented as a tf2::toMsg() function
-        Eigen::Quaterniond q(pose.second.linear());
-        tf.transform.rotation.x = q.x();
-        tf.transform.rotation.y = q.y();
-        tf.transform.rotation.z = q.z();
-        tf.transform.rotation.w = q.w();
-        tf.transform.translation.x = pose.second.translation().x();
-        tf.transform.translation.y = pose.second.translation().y();
-        tf.transform.translation.z = pose.second.translation().z();
-
-        tf.header.stamp = current_state_time_;
-        tf.header.frame_id = base_link;
-        tf.child_frame_id = pose.first;
-        transforms.push_back(tf);
+        if (pose.first != base_link)
+        {
+          geometry_msgs::msg::TransformStamped tf = tf2::eigenToTransform(pose.second);
+          tf.header.stamp = current_state_time_;
+          tf.header.frame_id = base_link;
+          tf.child_frame_id = pose.first;
+          transforms.push_back(tf);
+        }
       }
-    }
-    try
-    {
-      tf_broadcaster_.sendTransform(transforms);
-    }
-    catch (std::exception& e)
-    {
-      RCLCPP_ERROR(node_->get_logger(), "%s", e);
+      try
+      {
+        tf_broadcaster_->sendTransform(transforms);
+      }
+      catch (std::exception& e)
+      {
+        RCLCPP_ERROR(node_->get_logger(), "%s", e);
+      }
     }
   }
 
   // callbacks, if needed
   if (update)
-    for (std::size_t i = 0; i < update_callbacks_.size(); ++i)
-      update_callbacks_[i](joint_state);
+    for (auto& update_callback : update_callbacks_)
+      update_callback(joint_state);
 
   // notify waitForCurrentState() *after* potential update callbacks
   state_update_condition_.notify_all();
 }
 }  // namespace tesseract_monitoring
+
+
+
+// CurrentStateMonitor::~CurrentStateMonitor() { stopStateMonitor(); }
+// tesseract_environment::EnvState::Ptr CurrentStateMonitor::getCurrentState() const
+// {
+//   boost::mutex::scoped_lock slock(state_update_lock_);
+//   return std::make_shared<tesseract_environment::EnvState>(env_state_);
+// }
+//
+// rclcpp::Time CurrentStateMonitor::getCurrentStateTime() const
+// {
+//   boost::mutex::scoped_lock slock(state_update_lock_);
+//   return current_state_time_;
+// }
+//
+// std::pair<tesseract_environment::EnvState::Ptr, rclcpp::Time> CurrentStateMonitor::getCurrentStateAndTime() const
+// {
+//   boost::mutex::scoped_lock slock(state_update_lock_);
+//   return std::make_pair(std::make_shared<tesseract_environment::EnvState>(env_state_), current_state_time_);
+// }
+//
+// std::unordered_map<std::string, double> CurrentStateMonitor::getCurrentStateValues() const
+// {
+//   std::map<std::string, double> m;
+//   boost::mutex::scoped_lock slock(state_update_lock_);
+//   return env_state_.joints;
+// }
+//
+// void CurrentStateMonitor::addUpdateCallback(const JointStateUpdateCallback& fn)
+// {
+//   if (fn)
+//     update_callbacks_.push_back(fn);
+// }
+//
+// void CurrentStateMonitor::clearUpdateCallbacks() { update_callbacks_.clear(); }
+// void CurrentStateMonitor::startStateMonitor(const std::string& joint_states_topic, bool publish_tf)
+// {
+//   publish_tf_ = publish_tf;
+//   if (!state_monitor_started_ && env_)
+//   {
+//     joint_time_.clear();
+//     if (joint_states_topic.empty())
+//       RCLCPP_ERROR(node_->get_logger(), "The joint states topic cannot be an empty string");
+//     else
+//     {
+//       joint_state_subscriber_ = node_->create_subscription<sensor_msgs::msg::JointState>(
+//           joint_states_topic, 25, std::bind(&CurrentStateMonitor::jointStateCallback, this, std::placeholders::_1));
+//     }
+//     state_monitor_started_ = true;
+//     monitor_start_time_ = node_->now();
+//     RCLCPP_DEBUG(node_->get_logger(), "Listening to joint states on topic '%s'", joint_states_topic.c_str());
+//   }
+// }
+//
+// bool CurrentStateMonitor::isActive() const { return state_monitor_started_; }
+// void CurrentStateMonitor::stopStateMonitor()
+// {
+//   if (state_monitor_started_)
+//   {
+//     joint_state_subscriber_.reset();  // BUG Joe: Right way to do this>
+//     RCLCPP_DEBUG(node_->get_logger(), "No longer listening o joint states");
+//     state_monitor_started_ = false;
+//   }
+// }
+//
+// std::string CurrentStateMonitor::getMonitoredTopic() const
+// {
+//   if (joint_state_subscriber_)
+//     return joint_state_subscriber_->get_topic_name();
+//   else
+//     return "";
+// }
+//
+// bool CurrentStateMonitor::isPassiveOrMimicDOF(const std::string& /*dof*/) const
+// {
+//   // TODO: Levi Need to implement
+//
+//   //  if (robot_model_->hasJointModel(dof))
+//   //  {
+//   //    if (robot_model_->getJointModel(dof)->isPassive() ||
+//   //    robot_model_->getJointModel(dof)->getMimic())
+//   //      return true;
+//   //  }
+//   //  else
+//   //  {
+//   //    // check if this DOF is part of a multi-dof passive joint
+//   //    std::size_t slash = dof.find_last_of("/");
+//   //    if (slash != std::string::npos)
+//   //    {
+//   //      std::string joint_name = dof.substr(0, slash);
+//   //      if (robot_model_->hasJointModel(joint_name))
+//   //        if (robot_model_->getJointModel(joint_name)->isPassive() ||
+//   //        robot_model_->getJointModel(joint_name)->getMimic())
+//   //          return true;
+//   //    }
+//   //  }
+//   return false;
+// }
+//
+// bool CurrentStateMonitor::haveCompleteState() const
+// {
+//   bool result = true;
+//   boost::mutex::scoped_lock slock(state_update_lock_);
+//   for (const auto& joint : env_state_.joints)
+//     if (joint_time_.find(joint.first) == joint_time_.end())
+//     {
+//       if (!isPassiveOrMimicDOF(joint.first))
+//       {
+//         RCLCPP_DEBUG(node_->get_logger(), "Joint variable '%s' has never been updated", joint.first.c_str());
+//         result = false;
+//       }
+//     }
+//   return result;
+// }
+//
+// bool CurrentStateMonitor::haveCompleteState(std::vector<std::string>& missing_states) const
+// {
+//   bool result = true;
+//   boost::mutex::scoped_lock slock(state_update_lock_);
+//   for (const auto& joint : env_state_.joints)
+//     if (joint_time_.find(joint.first) == joint_time_.end())
+//       if (!isPassiveOrMimicDOF(joint.first))
+//       {
+//         RCLCPP_DEBUG(node_->get_logger(), "Joint variable '%s' has never been updated", joint.first.c_str());
+//         missing_states.push_back(joint.first);
+//         result = false;
+//       }
+//   return result;
+// }
+//
+// bool CurrentStateMonitor::haveCompleteState(const rclcpp::Duration& age) const
+// {
+//   bool result = true;
+//   rclcpp::Time now = node_->now();
+//   rclcpp::Time old = now - age;
+//   boost::mutex::scoped_lock slock(state_update_lock_);
+//   for (const auto& joint : env_state_.joints)
+//   {
+//     if (isPassiveOrMimicDOF(joint.first))
+//       continue;
+//     std::map<std::string, rclcpp::Time>::const_iterator it = joint_time_.find(joint.first);
+//     if (it == joint_time_.end())
+//     {
+//       RCLCPP_DEBUG(node_->get_logger(), "Joint variable '%s' has never been updated", joint.first.c_str());
+//       result = false;
+//     }
+//     else if (it->second < old)
+//     {
+//       RCLCPP_DEBUG(node_->get_logger(),
+//                    "Joint variable '%s' was last updated %0.3lf seconds ago "
+//                    "(older than the allowed %0.3lf seconds)",
+//                    joint.first.c_str(),
+//                    (now - it->second).seconds(),
+//                    age.seconds());
+//       result = false;
+//     }
+//   }
+//   return result;
+// }
+//
+// bool CurrentStateMonitor::haveCompleteState(const rclcpp::Duration& age, std::vector<std::string>& missing_states) const
+// {
+//   bool result = true;
+//   rclcpp::Time now = node_->now();
+//   rclcpp::Time old = now - age;
+//   boost::mutex::scoped_lock slock(state_update_lock_);
+//
+//   for (const auto& joint : env_state_.joints)
+//   {
+//     if (isPassiveOrMimicDOF(joint.first))
+//       continue;
+//     std::map<std::string, rclcpp::Time>::const_iterator it = joint_time_.find(joint.first);
+//     if (it == joint_time_.end())
+//     {
+//       RCLCPP_DEBUG(node_->get_logger(), "Joint variable '%s' has never been updated", joint.first.c_str());
+//       missing_states.push_back(joint.first);
+//       result = false;
+//     }
+//     else if (it->second < old)
+//     {
+//       RCLCPP_DEBUG(node_->get_logger(),
+//                    "Joint variable '%s' was last updated %0.3lf seconds ago "
+//                    "(older than the allowed %0.3lf seconds)",
+//                    joint.first.c_str(),
+//                    (now - it->second).seconds(),
+//                    age.seconds());
+//       missing_states.push_back(joint.first);
+//       result = false;
+//     }
+//   }
+//   return result;
+// }
+//
+// bool CurrentStateMonitor::waitForCurrentState(const rclcpp::Time t, double wait_time) const
+// {
+//   rclcpp::Time start = node_->now();
+//   rclcpp::Duration elapsed(0, 0);
+//   rclcpp::Duration timeout(wait_time);
+//
+//   boost::mutex::scoped_lock slock(state_update_lock_);
+//   while (current_state_time_ < t)
+//   {
+//     state_update_condition_.wait_for(slock, boost::chrono::nanoseconds((timeout - elapsed).nanoseconds()));
+//     elapsed = node_->now() - start;
+//     if (elapsed > timeout)
+//       return false;
+//   }
+//   return true;
+// }
+//
+// bool CurrentStateMonitor::waitForCompleteState(double wait_time) const
+// {
+//   double slept_time = 0.0;
+//   double sleep_step_s = std::min(0.05, wait_time / 10.0);
+//   while (!haveCompleteState() && slept_time < wait_time)
+//   {
+//     rclcpp::sleep_for(std::chrono::duration_cast<std::chrono::nanoseconds>(
+//         std::chrono::duration<double>(sleep_step_s)));  // TODO Joe: this seems unnecessarily clunky
+//     slept_time += sleep_step_s;
+//   }
+//   return haveCompleteState();
+// }
+//
+// bool CurrentStateMonitor::waitForCompleteState(const std::string& manip, double wait_time) const
+// {
+//   if (waitForCompleteState(wait_time))
+//     return true;
+//   bool ok = true;
+//
+//   // check to see if we have a fully known state for the joints we want to
+//   // record
+//   std::vector<std::string> missing_joints;
+//   if (!haveCompleteState(missing_joints))
+//   {
+//     tesseract_kinematics::ForwardKinematics::ConstPtr jmg = env_->getManipulatorManager()->getFwdKinematicSolver(manip);
+//     if (jmg)
+//     {
+//       std::set<std::string> mj;
+//       mj.insert(missing_joints.begin(), missing_joints.end());
+//       const std::vector<std::string>& names = jmg->getJointNames();
+//       bool ok = true;
+//       for (std::size_t i = 0; ok && i < names.size(); ++i)
+//         if (mj.find(names[i]) != mj.end())
+//           ok = false;
+//     }
+//     else
+//       ok = false;
+//   }
+//   return ok;
+// }
+//
+// void CurrentStateMonitor::jointStateCallback(const sensor_msgs::msg::JointState::SharedPtr joint_state)
+// {
+//   if (joint_state->name.size() != joint_state->position.size())
+//   {
+//     RCLCPP_ERROR_ONCE(node_->get_logger(),
+//                       "State monitor received invalid joint state (number of joint names does not match number of "
+//                       "positions)");
+//     return;
+//   }
+//   bool update = false;
+//
+//   {
+//     boost::mutex::scoped_lock slock(state_update_lock_);
+//     // read the received values, and update their time stamps
+//     current_state_time_ = joint_state->header.stamp;
+//     if (last_environment_revision_ != env_->getRevision())
+//     {
+//       env_state_ = tesseract_environment::EnvState(*env_->getCurrentState());
+//       last_environment_revision_ = env_->getRevision();
+//     }
+//
+//     for (unsigned i = 0; i < joint_state->name.size(); ++i)
+//     {
+//       if (env_state_.joints.find(joint_state->name[i]) != env_state_.joints.end())
+//       {
+//         double diff = env_state_.joints[joint_state->name[i]] - joint_state->position[i];
+//         if (std::fabs(diff) > std::numeric_limits<double>::epsilon())
+//         {
+//           env_state_.joints[joint_state->name[i]] = joint_state->position[i];
+//           update = true;
+//         }
+//         joint_time_[joint_state->name[i]] = joint_state->header.stamp;
+//       }
+//     }
+//
+//     if (update)
+//
+//     if (publish_tf_)
+//     {
+//        std::string base_link = env_->getRootLinkName();
+//        std::vector<geometry_msgs::msg::TransformStamped> transforms;
+//        transforms.reserve(env_state_.joints.size());
+//        for (const auto& pose : env_state_.link_transforms)
+//        {
+//          if (pose.first != base_link)
+//          {
+//            geometry_msgs::msg::TransformStamped tf = tf2::eigenToTransform(pose.second);
+//            /*
+//            Eigen::Quaterniond q(pose.second.linear());
+//            tf.transform.rotation.x = q.x();
+//            tf.transform.rotation.y = q.y();
+//            tf.transform.rotation.z = q.z();
+//            tf.transform.rotation.w = q.w();
+//            tf.transform.translation.x = pose.second.translation().x();
+//            tf.transform.translation.y = pose.second.translation().y();
+//            tf.transform.translation.z = pose.second.translation().z();
+//            */
+//            tf.header.stamp = current_state_time_;
+//            tf.header.frame_id = base_link;
+//            tf.child_frame_id = pose.first;
+//            transforms.push_back(tf);
+//          }
+//        }
+//        try
+//        {
+//          tf_broadcaster_->sendTransform(transforms);
+//        }
+//        catch (std::exception& e)
+//        {
+//          RCLCPP_ERROR(node_->get_logger(), "%s", e);
+//        }
+//   }
+//
+//   // callbacks, if needed
+//   if (update)
+//     for (auto& update_callback : update_callbacks_)
+//         update_callbacks_[i](joint_state);
+//
+//   // notify waitForCurrentState() *after* potential update callbacks
+//   state_update_condition_.notify_all();
+// }
+// }  // namespace tesseract_monitoring

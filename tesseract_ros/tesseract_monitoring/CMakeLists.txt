@@ -1,53 +1,58 @@
 cmake_minimum_required(VERSION 3.5.0)
 project(tesseract_monitoring VERSION 0.1.0 LANGUAGES CXX)
 
-find_package(tesseract REQUIRED)
 find_package(Eigen3 REQUIRED)
 
-list(FIND CMAKE_CXX_COMPILE_FEATURES cxx_std_17 CXX_FEATURE_FOUND)
-
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_core REQUIRED)
+find_package(ament_index_cpp REQUIRED)
+find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(tesseract_msgs REQUIRED)
 find_package(tesseract_rosutils REQUIRED)
-find_package(pluginlib REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_eigen REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
-include_directories(
-  include
-  ${catkin_INCLUDE_DIRS}
-)
+list(FIND CMAKE_CXX_COMPILE_FEATURES cxx_std_17 CXX_FEATURE_FOUND)
+
+# include_directories(
+#   include
+#   # ${catkin_INCLUDE_DIRS}
+# )
 
 # Tesseract ROS Nodes
-add_executable(${PROJECT_NAME}_contacts_node src/contact_monitor.cpp)
-target_link_libraries(${PROJECT_NAME}_contacts_node PRIVATE
-    tesseract::tesseract
-    tesseract::tesseract_rosutils
+add_library(${PROJECT_NAME}_contacts src/contact_monitor.cpp)
+target_link_libraries(${PROJECT_NAME}_contacts PRIVATE
+    tesseract::tesseract_environment_core
+    ${PROJECT_NAME}_environment
     ${rclcpp_LIBRARIES}
-    ${tesseract_msgs_LIBRARIES}
-    ${sensor_msgs_LIBRARIES}
-    ${Boost_LIBRARIES}
     )
-target_compile_options(${PROJECT_NAME}_contacts_node PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
-set_target_properties(${PROJECT_NAME}_contacts_node PROPERTIES CXX_STANDARD 14)
-target_include_directories(${PROJECT_NAME}_contacts_node PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
-target_include_directories(${PROJECT_NAME}_contacts_node SYSTEM PUBLIC
+target_compile_options(${PROJECT_NAME}_contacts PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
+set_target_properties(${PROJECT_NAME}_contacts PROPERTIES CXX_STANDARD 14)
+target_include_directories(${PROJECT_NAME}_contacts PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
+target_include_directories(${PROJECT_NAME}_contacts SYSTEM PUBLIC
     ${rclcpp_INCLUDE_DIRS}
     ${tesseract_msgs_INCLUDE_DIRS}
     ${sensor_msgs_INCLUDE_DIRS}
-    ${Boost_INCLUDE_DIRS}
 )
-list (APPEND PACKAGE_LIBRARIES ${PROJECT_NAME}_contacts_node)
+# ament_target_dependencies(
+#   ${PROJECT_NAME}_contacts
+#     pluginlib
+#   )
+
+list (APPEND PACKAGE_LIBRARIES ${PROJECT_NAME}_contacts)
 
 add_library(${PROJECT_NAME}_environment SHARED
-#    src/environment_monitor_node.cpp
-    src/environment_monitor.cpp
+#   src/contact_monitor_node.cpp
+    src/contact_monitor.cpp
     src/current_state_monitor.cpp
+#   src/environment_monitor_interface.cpp
+#   src/environment_monitor_node.cpp
+    src/environment_monitor.cpp
     )
 target_link_libraries(${PROJECT_NAME}_environment PUBLIC
     ${rclcpp_LIBRARIES}
-    tesseract::tesseract
     tesseract::tesseract_rosutils
     tesseract::tesseract_collision_core
     ${Boost_LIBRARIES}
@@ -97,12 +102,13 @@ ament_export_dependencies(
     roscpp
     tesseract_msgs
     tesseract_rosutils
-    pluginlib
+#    pluginlib
     dynamic_reconfigure
     tf2_ros
     tf2_eigen
     EIGEN3
-    tesseract)
+    #tesseract
+    )
 
 ament_export_include_directories(include)
 
