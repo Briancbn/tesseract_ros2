@@ -70,7 +70,7 @@ ContactMonitor::ContactMonitor(std::string monitor_namespace,
   std::string contact_results_topic = R"(/)" + monitor_namespace_ + DEFAULT_PUBLISH_CONTACT_RESULTS_TOPIC;
   std::string compute_contact_results = R"(/)" + monitor_namespace_ + DEFAULT_COMPUTE_CONTACT_RESULTS_SERVICE;
 
-  contact_results_pub_ = node_->create_publisher<tesseract_msgs::ContactResultVector>(contact_results_topic, 1);
+  contact_results_pub_ = node_->create_publisher<tesseract_msgs::msg::ContactResultVector>(contact_results_topic, 1);
   compute_contact_results = node_->create_service<tesseract_msgs::srv::ComputeContactResultVector>(
          "compute_contact_results", &ContactMonitor::callbackComputeContactResultVector);
 }

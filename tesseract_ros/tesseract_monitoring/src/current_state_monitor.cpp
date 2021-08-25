@@ -264,7 +264,7 @@ bool CurrentStateMonitor::waitForCurrentState(const rclcpp::Time t, double wait_
 {
   rclcpp::Time start = node_->now();
   rclcpp::Duration elapsed(0, 0);
-  rclcpp::Duration timeout(wait_time,0);
+  rclcpp::Duration timeout(0, static_cast<unsigned int>(wait_time*1e9));
 
   std::unique_lock slock(state_update_lock_);
   while (current_state_time_ < t)

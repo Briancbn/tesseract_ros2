@@ -55,8 +55,8 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 // #include <boost/noncopyable.hpp>
 // #include <boost/thread/recursive_mutex.hpp>
 
-#include <tesseract_msgs/msg/environment_state.h>
-// #include <tesseract_msgs/msg/tesseract_state.hpp>
+#include <tesseract_msgs/msg/environment_state.hpp>
+#include <tesseract_msgs/msg/tesseract_state.hpp>
 #include <tesseract_msgs/srv/modify_environment.hpp>
 #include <tesseract_msgs/srv/get_environment_changes.hpp>
 #include <tesseract_msgs/srv/get_environment_information.hpp>
@@ -119,14 +119,14 @@ enum class MonitoredEnvironmentMode : int
 class EnvironmentMonitor
 {
 public:
-  typedef std::shared_ptr<EnvironmentMonitor> Ptr;
-  typedef std::shared_ptr<const EnvironmentMonitor> ConstPtr;
+  // typedef std::shared_ptr<EnvironmentMonitor> Ptr;
+  // typedef std::shared_ptr<const EnvironmentMonitor> ConstPtr;
 
   /** @brief Constructor
    *  @param robot_description The name of the ROS parameter that contains the URDF (in string format)
    *  @param monitor_namespace A name identifying this monitor, must be unique
    */
-  EnvironmentMonitor(const std::string& robot_description,
+  EnvironmentMonitor(std::string robot_description,
                      rclcpp::Node::SharedPtr node,
                      std::string monitor_namespace,
                      std::string discrete_plugin = "",
@@ -309,6 +309,7 @@ protected:
    */
   bool initialize();
 
+  std::string robot_description_;
   /// The name of this scene monitor
   std::string monitor_namespace_;
   std::string discrete_plugin_name_;
@@ -325,8 +326,6 @@ protected:
 
   // ros::NodeHandle nh_;
   // ros::NodeHandle root_nh_;
-
-  std::string robot_description_;
 
   // variables for planning scene publishing
   rclcpp::Publisher<tesseract_msgs::msg::EnvironmentState>::SharedPtr environment_publisher_;
@@ -371,6 +370,7 @@ protected:
 private:
   rclcpp::Node::SharedPtr node_;
   rclcpp::Clock::SharedPtr clock_;
+  rclcpp::callback_group::CallbackGroup::SharedPtr callback_group_;
 
   void getUpdatedFrameTransforms(std::vector<geometry_msgs::msg::TransformStamped>& transforms);
 
