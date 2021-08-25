@@ -118,11 +118,10 @@ list (APPEND PACKAGE_LIBRARIES ${PROJECT_NAME}_contacts)
 # list (APPEND PACKAGE_LIBRARIES ${PROJECT_NAME}_environment_node)
 
 ament_export_dependencies(
-    roscpp
+    rclcpp
     tesseract_msgs
     tesseract_rosutils
     pluginlib
-    dynamic_reconfigure
     tf2_ros
     tf2_eigen
     EIGEN3
