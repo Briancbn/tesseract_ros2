@@ -71,6 +71,8 @@ set(msg_files
     "msg/StringLimitsPair.msg"
     "msg/StringPair.msg"
     "msg/TaskInfo.msg"
+    "msg/TesseractInitInfo.msg"
+    "msg/TesseractState.msg"
     "msg/Trajectory.msg"
     "msg/TransformMap.msg"
     "msg/VisualGeometry.msg"
