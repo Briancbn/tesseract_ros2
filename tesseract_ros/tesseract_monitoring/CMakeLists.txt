@@ -30,6 +30,7 @@ target_link_libraries(${PROJECT_NAME}_environment PUBLIC
                       tesseract::tesseract_environment_ofkt
                       tesseract::tesseract_rosutils
                       ${rclcpp_LIBRARIES}
+                      ${tesseract_msgs_LIBRARIES}
                       )
 target_compile_options(${PROJECT_NAME}_environment PRIVATE ${TESSERACT_COMPILE_OPTIONS})
 target_include_directories(${PROJECT_NAME}_environment PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
@@ -46,6 +47,7 @@ target_link_libraries(${PROJECT_NAME}_contacts PRIVATE
     tesseract::tesseract_environment_core
     ${PROJECT_NAME}_environment
     ${rclcpp_LIBRARIES}
+    ${tesseract_msgs_LIBRARIES}
     )
 target_compile_options(${PROJECT_NAME}_contacts PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
 set_target_properties(${PROJECT_NAME}_contacts PROPERTIES CXX_STANDARD 14)
@@ -94,19 +96,24 @@ list (APPEND PACKAGE_LIBRARIES ${PROJECT_NAME}_contacts)
 #     )
 # list (APPEND PACKAGE_LIBRARIES ${PROJECT_NAME}_environment)
 
-# TODO Joe: Migrate demo
-#add_executable(demo_scene demos/demo_scene.cpp)
-#target_link_libraries(demo_scene PRIVATE
-#    ${PROJECT_NAME}_environment
-#    ${catkin_LIBRARIES})
-#target_compile_options(demo_scene PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
-#if(CXX_FEATURE_FOUND EQUAL "-1")
+# Demo
+add_executable(demo_scene demos/demo_scene.cpp)
+target_link_libraries(demo_scene PRIVATE
+                     ${PROJECT_NAME}_environment
+                     ${rclcpp_LIBRARIES}
+                     ${tesseract_msgs_LIBRARIES}
+                     )
+target_compile_options(demo_scene PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
+# if(CXX_FEATURE_FOUND EQUAL "-1")
 #    target_compile_options(demo_scene PRIVATE -std=c++11)
-#else()
+# else()
 #    target_compile_features(demo_scene PRIVATE cxx_std_11)
-#endif()
-#target_include_directories(demo_scene PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
-#target_include_directories(demo_scene SYSTEM PUBLIC ${catkin_INCLUDE_DIRS})
+# endif()
+target_include_directories(demo_scene PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
+target_include_directories(demo_scene SYSTEM PUBLIC
+                           ${rclcpp_INCLUDE_DIRS}
+                           ${tesseract_msgs_INCLUDE_DIRS}
+                          )
 
 # TODO Joe: Migrate this node(?)
 # add_executable(${PROJECT_NAME}_environment_node src/environment_monitor_node.cpp)
@@ -152,6 +159,7 @@ install(TARGETS
    ${PROJECT_NAME}_environment
    ${PROJECT_NAME}_contacts
    # ${PROJECT_NAME}_environment_node
+   demo_scene
    DESTINATION lib/${PROJECT_NAME})
 
 # Mark cpp header files for installation
