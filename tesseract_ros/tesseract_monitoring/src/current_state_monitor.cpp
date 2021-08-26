@@ -68,7 +68,7 @@ CurrentStateMonitor::CurrentStateMonitor(const tesseract_environment::Environmen
   , state_monitor_started_(false)
   , copy_dynamics_(false)
   , error_(std::numeric_limits<double>::epsilon())
-  , tf_broadcaster_(std::make_shared<tf2_ros::TransformBroadcaster>(this))
+  , tf_broadcaster_(std::make_shared<tf2_ros::TransformBroadcaster>(node))
 {
 }
 
@@ -319,7 +319,7 @@ bool CurrentStateMonitor::waitForCompleteState(const std::string& manip, double 
   return ok;
 }
 
-void CurrentStateMonitor::jointStateCallback(const sensor_msgs::msg::JointState::SharedPtr joint_state)
+void CurrentStateMonitor::jointStateCallback(const sensor_msgs::msg::JointState::ConstSharedPtr joint_state)
 {
   if (joint_state->name.size() != joint_state->position.size())
   {

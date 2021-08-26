@@ -57,7 +57,7 @@ TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 namespace tesseract_monitoring
 {
-typedef std::function<void(const sensor_msgs::msg::JointState::SharedPtr& joint_state)> JointStateUpdateCallback;
+typedef std::function<void(const sensor_msgs::msg::JointState::ConstSharedPtr& joint_state)> JointStateUpdateCallback;
 
 /** @class CurrentStateMonitor
     @brief Monitors the joint_states topic and tf to maintain the current state of the robot. */
@@ -182,7 +182,7 @@ public:
   void enableCopyDynamics(bool enabled) { copy_dynamics_ = enabled; }
 
 private:
-  void jointStateCallback(const sensor_msgs::msg::JointState::SharedPtr joint_state);
+  void jointStateCallback(const sensor_msgs::msg::JointState::ConstSharedPtr joint_state);
   bool isPassiveOrMimicDOF(const std::string& dof) const;
 
   rclcpp::Node::SharedPtr node_;

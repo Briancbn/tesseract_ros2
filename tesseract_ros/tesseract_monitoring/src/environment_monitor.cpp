@@ -494,9 +494,10 @@ void EnvironmentMonitor::startMonitoringEnvironment(const std::string& monitored
   get_monitored_environment_information_client_ =
       node_->create_client<tesseract_msgs::srv::GetEnvironmentInformation>(monitored_environment_information_service);
 
+  auto env_callback = std::bind(&tesseract_monitoring::EnvironmentMonitor::newEnvironmentStateCallback, this, std::placeholders::_1);
   monitored_environment_subscriber_ =
       node_->create_subscription<tesseract_msgs::msg::Environment>(
-          monitored_environment_topic, 1000, std::bind(&tesseract_monitoring::EnvironmentMonitor::newEnvironmentStateCallback, this, std::placeholders::_1));
+          monitored_environment_topic, 1000, env_callback);
 
   RCLCPP_INFO(node_->get_logger(), "Monitoring external environment on '%s'", monitored_environment_topic.c_str());
 }
@@ -514,7 +515,7 @@ void EnvironmentMonitor::getStateMonitoredTopics(std::vector<std::string>& topic
 
 double EnvironmentMonitor::getStateUpdateFrequency() const
 {
-  if (!dt_state_update_==std::chrono::duration.zero())
+  if (dt_state_update_!=std::chrono::seconds::zero())
     return 1.0 / std::chrono::duration_cast<std::chrono::seconds>(dt_state_update_).count();
 
   return 0.0;
@@ -531,7 +532,7 @@ void EnvironmentMonitor::triggerEnvironmentUpdateEvent()
   new_environment_update_condition_.notify_all();
 }
 
-void EnvironmentMonitor::newEnvironmentStateCallback(const tesseract_msgs::EnvironmentState::SharedPtr& env)
+void EnvironmentMonitor::newEnvironmentStateCallback(const tesseract_msgs::msg::EnvironmentState::ConstSharedPtr env)
 {
   {
     std::unique_lock<std::shared_mutex> ulock(scene_update_mutex_);
@@ -539,30 +540,28 @@ void EnvironmentMonitor::newEnvironmentStateCallback(const tesseract_msgs::Envir
 
     if (!env_->isInitialized())
     {
-      auto res = std::make_shared<tesseract_msgs::srv::GetEnvironmentInformation>();
-      res->request.flags = tesseract_msgs::srv::GetEnvironmentInformation::Request::COMMAND_HISTORY |
+      auto res = std::make_shared<tesseract_msgs::srv::GetEnvironmentInformation::Request>();
+      res->flags = tesseract_msgs::srv::GetEnvironmentInformation::Request::COMMAND_HISTORY |
                           tesseract_msgs::srv::GetEnvironmentInformation::Request::KINEMATICS_INFORMATION;
 
       auto result_future = get_monitored_environment_information_client_->async_send_request(res);
-      if (rclcpp::spin_until_future_complete(node, result_future) !=
+      if (rclcpp::spin_until_future_complete(node_, result_future) !=
           rclcpp::FutureReturnCode::SUCCESS)
       {
         RCLCPP_ERROR(node_->get_logger(),
-                     "[%s]: newEnvironmentStateCallback: Failed to get monitor environment information!",
-                     monitor_namespace_.c_str());
+                     "newEnvironmentStateCallback: Failed to get monitor environment information!");
         return;
       }
       auto result = result_future.get();
       tesseract_environment::Commands commands;
       try
       {
-        commands = tesseract_rosutils::fromMsg(result->response.command_history);
+        commands = tesseract_rosutils::fromMsg(result->command_history);
       }
       catch (const std::exception& e)
       {
         RCLCPP_ERROR(node_->get_logger(),
-                        "[%s]: newEnvironmentStateCallback: Failed to convert command history message, %s!",
-                        monitor_namespace_.c_str(),
+                        "newEnvironmentStateCallback: Failed to convert command history message, %s!",
                         e.what());
         return;
       }
@@ -570,9 +569,7 @@ void EnvironmentMonitor::newEnvironmentStateCallback(const tesseract_msgs::Envir
       if (!env_->init<tesseract_environment::OFKTStateSolver>(commands))
       {
         RCLCPP_ERROR(node_->get_logger(),
-                    "[%s]: newEnvironmentStateCallback: Failed to initialize environment!"),
-                    monitor_namespace_.c_str()
-                    );
+                    "newEnvironmentStateCallback: Failed to initialize environment!");
         return;
       }
 
@@ -586,26 +583,22 @@ void EnvironmentMonitor::newEnvironmentStateCallback(const tesseract_msgs::Envir
       // If the monitored environment has changed then request the changes and apply
       if (static_cast<int>(env->revision) > env_->getRevision())
       {
-        auto res = std::make_shared<tesseract_msgs::srv::GetEnvironmentChanges>();
-        res->request.revision = static_cast<unsigned long>(env_->getRevision());
-        auto result_future = get_monitored_environment_information_client_->async_send_request(res);
-        if (rclcpp::spin_until_future_complete(node, result_future) ==
+        auto res = std::make_shared<tesseract_msgs::srv::GetEnvironmentChanges::Request>();
+        res->revision = static_cast<unsigned long>(env_->getRevision());
+        auto result_future = get_monitored_environment_changes_client_->async_send_request(res);
+        if (rclcpp::spin_until_future_complete(node_, result_future) ==
             rclcpp::FutureReturnCode::SUCCESS)
         {
-          if (!tesseract_rosutils::processMsg(*env_, result_future.get()->response.commands))
+          if (!tesseract_rosutils::processMsg(*env_, result_future.get()->commands))
           {
             RCLCPP_ERROR(node_->get_logger(),
-                         "[%s]: newEnvironmentStateCallback: Failed to apply monitored environments changes.",
-                         monitor_namespace_.c_str()
-                        );
+                         "newEnvironmentStateCallback: Failed to apply monitored environments changes.");
           }
         }
         else
         {
           RCLCPP_ERROR(node_->get_logger(),
-                       "[%s]: newEnvironmentStateCallback: Failed to get monitored environments changes.",
-                       monitor_namespace_.c_str()
-                      );
+                       "newEnvironmentStateCallback: Failed to get monitored environments changes.");
         }
       }
       else if (static_cast<int>(env->revision) < env_->getRevision())
@@ -618,68 +611,57 @@ void EnvironmentMonitor::newEnvironmentStateCallback(const tesseract_msgs::Envir
           {
             if (static_cast<int>(env->revision) > env_->getRevision())
             {
-              auto res = std::make_shared<tesseract_msgs::srv::GetEnvironmentChanges>();
-              res->request.revision = static_cast<unsigned long>(env_->getRevision());
-              auto result_future = get_monitored_environment_information_client_->async_send_request(res);
-              if (rclcpp::spin_until_future_complete(node, result_future) ==
+              auto res = std::make_shared<tesseract_msgs::srv::GetEnvironmentChanges::Request>();
+              res->revision = static_cast<unsigned long>(env_->getRevision());
+              auto result_future = get_monitored_environment_changes_client_->async_send_request(res);
+              if (rclcpp::spin_until_future_complete(node_, result_future) ==
                   rclcpp::FutureReturnCode::SUCCESS)
               {
-                if (!tesseract_rosutils::processMsg(*env_, result_future.get().response.commands))
+                if (!tesseract_rosutils::processMsg(*env_, result_future.get()->commands))
                 {
                   RCLCPP_ERROR(node_->get_logger(),
-                              "newEnvironmentStateCallback: Failed to apply monitored environments changes.",
-                              monitor_namespace_.c_str());
+                              "newEnvironmentStateCallback: Failed to apply monitored environments changes.");
                 }
               }
               else
               {
                 RCLCPP_ERROR(node_->get_logger(),
-                            "[%s]: newEnvironmentStateCallback: Failed to get monitored environments changes.",
-                            monitored_namespace_.c_str()
-                            );
+                            "newEnvironmentStateCallback: Failed to get monitored environments changes.");
               }
             }
           }
           else
           {
             RCLCPP_ERROR(node_->get_logger(),
-                        "[%s]: newEnvironmentStateCallback: Failed to reset the tesseract object!",
-                        monitor_namespace_.c_str()
-                        );
+                        "[%s]: newEnvironmentStateCallback: Failed to reset the tesseract object!");
           }
         }
         else if (monitored_environment_mode_ == MonitoredEnvironmentMode::SYNCHRONIZED)
         {
           // If this has been modified it will push the changes to the monitored environment to keep them in sync
-          auto res = std::make_shared<tesseract_msgs::srv::ModifyEnvironment>();
-          res->request.id = env_->getName();
-          res->request.revision = env->revision;
-          if (tesseract_rosutils::toMsg(res->request.commands, env_->getCommandHistory(), env->revision))
+          auto res = std::make_shared<tesseract_msgs::srv::ModifyEnvironment::Request>();
+          res->id = env_->getName();
+          res->revision = env->revision;
+          if (tesseract_rosutils::toMsg(res->commands, env_->getCommandHistory(), env->revision))
           {
-            bool status = modify_monitored_environment_client_.call(res);
-            if (rclcpp::spin_until_future_complete(node, result_future) !=
+            auto result_future = modify_monitored_environment_client_->async_send_request(res);
+            if (rclcpp::spin_until_future_complete(node_, result_future) !=
                 rclcpp::FutureReturnCode::SUCCESS)
             {
               RCLCPP_ERROR(node_->get_logger(),
-                          "[%s]: newEnvironmentStateCallback: Failed to update monitored environment!",
-                          monitored_namespace_.c_str()
-                          );
+                          "newEnvironmentStateCallback: Failed to update monitored environment!");
             }
           }
           else
           {
             RCLCPP_ERROR(node_->get_logger(),
-                        "[%s]: newEnvironmentStateCallback: Failed to convert latest changes to message and update monitored environment!",
-                        monitored_namespace_.c_str()
-                        );
+                        "newEnvironmentStateCallback: Failed to convert latest changes to message and update monitored environment!");
           }
         }
         else
         {
           RCLCPP_ERROR(node_->get_logger(),
-                      "[%s]: newEnvironmentStateCallback: Unsupporte MonitoredEnvironmentMode!",
-                      monitored_namespace_.c_str()
-                      );
+                      "newEnvironmentStateCallback: Unsupporte MonitoredEnvironmentMode!");
         }
       }
     }
@@ -748,7 +730,7 @@ bool EnvironmentMonitor::applyEnvironmentCommandsMessage(
   return result;
 }
 
-bool saveSceneGraphCallback(
+bool EnvironmentMonitor::saveSceneGraphCallback(
     const std::shared_ptr<tesseract_msgs::srv::SaveSceneGraph::Request> req,
     std::shared_ptr<tesseract_msgs::srv::SaveSceneGraph::Response> res)
 {
@@ -762,7 +744,7 @@ bool saveSceneGraphCallback(
 
 bool EnvironmentMonitor::waitForCurrentState(const rclcpp::Time& t, double wait_time)
 {
-  if (t==std::chrono::duration.zero())
+  if (t==rclcpp::Time(0))
     return false;
   rclcpp::Time start = clock_->now();
   std::chrono::duration<double> timeout(wait_time);
@@ -878,7 +860,7 @@ void EnvironmentMonitor::stopStateMonitor()
   }
 }
 
-void EnvironmentMonitor::onJointStateUpdate(const sensor_msgs::msg::JointState::SharedPtr& /* joint_state */)
+void EnvironmentMonitor::onJointStateUpdate(const sensor_msgs::msg::JointState::ConstSharedPtr /*joint_state*/ )
 {
   const rclcpp::Time& n = clock_->now();
   rclcpp::Duration dt = n - last_robot_state_update_wall_time_;

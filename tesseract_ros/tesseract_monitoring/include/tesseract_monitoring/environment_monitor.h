@@ -119,8 +119,8 @@ enum class MonitoredEnvironmentMode : int
 class EnvironmentMonitor
 {
 public:
-  // typedef std::shared_ptr<EnvironmentMonitor> Ptr;
-  // typedef std::shared_ptr<const EnvironmentMonitor> ConstPtr;
+  typedef std::shared_ptr<EnvironmentMonitor> Ptr;
+  typedef std::shared_ptr<const EnvironmentMonitor> ConstPtr;
 
   /** @brief Constructor
    *  @param robot_description The name of the ROS parameter that contains the URDF (in string format)
@@ -378,13 +378,13 @@ private:
   void environmentPublishingThread();
 
   // called by current_state_monitor_ when robot state (as monitored on joint state topic) changes
-  void onJointStateUpdate(const sensor_msgs::msg::JointState::SharedPtr& joint_state);
+  void onJointStateUpdate(const sensor_msgs::msg::JointState::ConstSharedPtr /*joint_state*/);
 
   // called by state_update_timer_ when a state update it pending
   void updateJointStateTimerCallback(/*const rclcpp::WallTimerEvent& event*/);
 
   // Callback for a new state msg
-  void newEnvironmentStateCallback(const tesseract_msgs::msg::EnvironmentState::SharedPtr& env);
+  void newEnvironmentStateCallback(const tesseract_msgs::msg::EnvironmentState::ConstSharedPtr env);
 
   /** @brief Callback for modifying the environment via service request */
   bool modifyEnvironmentCallback(

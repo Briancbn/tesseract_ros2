@@ -54,6 +54,7 @@ target_include_directories(${PROJECT_NAME}_contacts SYSTEM PUBLIC
     ${rclcpp_INCLUDE_DIRS}
     ${tesseract_msgs_INCLUDE_DIRS}
     ${sensor_msgs_INCLUDE_DIRS}
+    ${visualization_msgs_INCLUDE_DIRS}
 )
 # ament_target_dependencies(
 #   ${PROJECT_NAME}_contacts

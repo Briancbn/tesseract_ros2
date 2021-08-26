@@ -34,10 +34,11 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <rclcpp/publisher.hpp>
 #include <rclcpp/subscription.hpp>
 #include <rclcpp/service.hpp>
-#include <sensor_msgs/msg/joint_state.h>
-#include <tesseract_msgs/srv/compute_contact_result_vector.h>
-#include <tesseract_msgs/srv/modify_environment.h>
-#include <tesseract_msgs/msg/environment_state.h>
+#include <sensor_msgs/msg/joint_state.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
+#include <tesseract_msgs/srv/compute_contact_result_vector.hpp>
+#include <tesseract_msgs/srv/modify_environment.hpp>
+#include <tesseract_msgs/msg/environment_state.hpp>
 #include <mutex>
 #include <condition_variable>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
@@ -54,7 +55,6 @@ public:
   ContactMonitor(std::string monitor_namespace,
                  const tesseract_environment::Environment::Ptr& env,
                  rclcpp::Node::SharedPtr& node,
-                 rclcpp::Node::SharedPtr& pnh,
                  const std::vector<std::string>& monitored_link_names,
                  const tesseract_collision::ContactTestType& type,
                  double contact_distance = 0.1,
@@ -97,13 +97,15 @@ public:
    */
   void computeCollisionReportThread();
 
-  void callbackJointState(boost::shared_ptr<sensor_msgs::msg::JointState> msg);
+  void callbackJointState(const sensor_msgs::msg::JointState::ConstSharedPtr msg);
 
-  bool callbackModifyTesseractEnv(tesseract_msgs::srv::ModifyEnvironment::Request& request,
-                                  tesseract_msgs::srv::ModifyEnvironment::Response& response);
+  bool callbackModifyTesseractEnv(
+      const tesseract_msgs::srv::ModifyEnvironment::Request::SharedPtr request,
+      tesseract_msgs::srv::ModifyEnvironment::Response::SharedPtr response);
 
-  bool callbackComputeContactResultVector(tesseract_msgs::srv::ComputeContactResultVector::Request& request,
-                                          tesseract_msgs::srv::ComputeContactResultVector::Response& response);
+  bool callbackComputeContactResultVector(
+      const tesseract_msgs::srv::ComputeContactResultVector::Request::SharedPtr request,
+      tesseract_msgs::srv::ComputeContactResultVector::Response::SharedPtr response);
 
   void callbackTesseractEnvDiff(const tesseract_msgs::msg::EnvironmentState::SharedPtr& state);
 
@@ -114,7 +116,7 @@ private:
   tesseract_monitoring::EnvironmentMonitor::Ptr monitor_;
   tesseract_environment::Environment::Ptr env_;
   rclcpp::Node::SharedPtr& node_;
-  rclcpp::Node::SharedPtr& pnh_;
+  rclcpp::callback_group::CallbackGroup::SharedPtr callback_group_;
   std::vector<std::string> monitored_link_names_;
   tesseract_collision::ContactTestType type_;
   double contact_distance_;
@@ -124,10 +126,10 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_states_sub_;
   rclcpp::Publisher<tesseract_msgs::msg::ContactResultVector>::SharedPtr contact_results_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr contact_marker_pub_;
-  rclcpp::Service<tesseract_msgs::srv::ComputeContactResultVectorRequest>::SharedPtr compute_contact_results_;
+  rclcpp::Service<tesseract_msgs::srv::ComputeContactResultVector>::SharedPtr compute_contact_results_;
 
   std::mutex modify_mutex_;
-  boost::shared_ptr<sensor_msgs::msg::JointState> current_joint_states_;
+  sensor_msgs::msg::JointState::ConstSharedPtr current_joint_states_;
   std::condition_variable current_joint_states_evt_;
 };
 
