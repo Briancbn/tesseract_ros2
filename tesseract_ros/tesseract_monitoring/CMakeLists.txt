@@ -29,17 +29,41 @@ target_link_libraries(${PROJECT_NAME}_environment PUBLIC
                       tesseract::tesseract_environment_core
                       tesseract::tesseract_environment_ofkt
                       tesseract::tesseract_rosutils
+                      pluginlib::pluginlib
                       ${rclcpp_LIBRARIES}
                       ${tesseract_msgs_LIBRARIES}
+                      ${visualization_msgs_LIBRARIES}
+                      ${tf2_ros_LIBRARIES}
                       )
+
 target_compile_options(${PROJECT_NAME}_environment PRIVATE ${TESSERACT_COMPILE_OPTIONS})
 target_include_directories(${PROJECT_NAME}_environment PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
 target_include_directories(${PROJECT_NAME}_environment SYSTEM PUBLIC
                            ${rclcpp_INCLUDE_DIRS}
                            ${tesseract_msgs_INCLUDE_DIRS}
+                           ${visualization_msgs_INCLUDE_DIRS}
                            ${sensor_msgs_INCLUDE_DIRS}
                           )
-
+# Link libraries
+# ament_target_dependencies(
+#   ${PROJECT_NAME}_environment
+#   tesseract_environment
+#   tesseract_rosutils
+#   tesseract_common
+#   tesseract_srdf
+#   tesseract_urdf
+#   tesseract_rosutils
+#   tesseract_scene_graph
+#   tesseract_collision
+#   tesseract_geometry
+#   tesseract_kinematics
+#   tesseract_motion_planners
+#   tesseract_command_language
+#   tesseract_process_managers
+#   rclcpp
+#   pluginlib
+#   Eigen3
+# )
 list (APPEND PACKAGE_LIBRARIES ${PROJECT_NAME}_environment)
 
 add_library(${PROJECT_NAME}_contacts src/contact_monitor.cpp)
@@ -115,15 +139,19 @@ target_include_directories(demo_scene SYSTEM PUBLIC
                            ${tesseract_msgs_INCLUDE_DIRS}
                           )
 
-# TODO Joe: Migrate this node(?)
-# add_executable(${PROJECT_NAME}_environment_node src/environment_monitor_node.cpp)
-# target_link_libraries(${PROJECT_NAME}_environment_node PRIVATE
-#     ${PROJECT_NAME}_environment)
-# target_compile_options(${PROJECT_NAME}_environment_node PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
+# Env monitor node
+add_executable(${PROJECT_NAME}_environment_node src/environment_monitor_node.cpp)
+target_link_libraries(${PROJECT_NAME}_environment_node PRIVATE
+                      ${PROJECT_NAME}_environment
+                      ${rclcpp_LIBRARIES}
+                     )
+target_compile_options(${PROJECT_NAME}_environment_node PRIVATE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
 # set_target_properties(${PROJECT_NAME}_environment_node PROPERTIES CXX_STANDARD 14)
-# target_include_directories(${PROJECT_NAME}_environment_node PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
-# #target_include_directories(${PROJECT_NAME}_environment_node SYSTEM PUBLIC ${rclcpp_INCLUDE_DIRS})
-# list (APPEND PACKAGE_LIBRARIES ${PROJECT_NAME}_environment_node)
+target_include_directories(${PROJECT_NAME}_environment_node PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
+target_include_directories(${PROJECT_NAME}_environment_node SYSTEM PUBLIC
+                           ${rclcpp_INCLUDE_DIRS}
+                          )
+list (APPEND PACKAGE_LIBRARIES ${PROJECT_NAME}_environment_node)
 
 ament_export_dependencies(
     rclcpp
@@ -158,7 +186,7 @@ install(EXPORT ${PROJECT_NAME}-targets NAMESPACE tesseract:: DESTINATION lib/cma
 install(TARGETS
    ${PROJECT_NAME}_environment
    ${PROJECT_NAME}_contacts
-   # ${PROJECT_NAME}_environment_node
+   ${PROJECT_NAME}_environment_node
    demo_scene
    DESTINATION lib/${PROJECT_NAME})
 
