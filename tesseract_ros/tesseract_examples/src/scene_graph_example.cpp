@@ -25,7 +25,7 @@
  */
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_ros_examples/scene_graph_example.h>
@@ -54,19 +54,20 @@ bool SceneGraphExample::run()
 {
   // Initial setup
   std::string urdf_xml_string, srdf_xml_string;
-  nh_.getParam(ROBOT_DESCRIPTION_PARAM, urdf_xml_string);
-  nh_.getParam(ROBOT_SEMANTIC_PARAM, srdf_xml_string);
+  // ToDo: Implement parameter
+  // node_->get_parameter(ROBOT_DESCRIPTION_PARAM, urdf_xml_string);
+  // node_->get_parameter(ROBOT_SEMANTIC_PARAM, srdf_xml_string);
 
   ResourceLocator::Ptr locator = std::make_shared<tesseract_rosutils::ROSResourceLocator>();
   if (!env_->init<OFKTStateSolver>(urdf_xml_string, srdf_xml_string, locator))
     return false;
 
   // Create monitor
-  monitor_ = std::make_shared<tesseract_monitoring::EnvironmentMonitor>(env_, EXAMPLE_MONITOR_NAMESPACE);
+  monitor_ = std::make_shared<tesseract_monitoring::EnvironmentMonitor>(env_, node_, EXAMPLE_MONITOR_NAMESPACE);
   if (rviz_)
     monitor_->startPublishingEnvironment();
 
-  ros::spinOnce();
+  // ros::spinOnce();
   {
     auto lock = monitor_->lockEnvironmentRead();
     monitor_->getEnvironment()->getSceneGraph()->saveDOT("scene_graph_example.dot");
@@ -78,14 +79,14 @@ bool SceneGraphExample::run()
   if (plotting_)
   {
     plotter->waitForInput();
-    ROS_INFO("Reconfiguring using moveJoint");
+    RCLCPP_INFO(node_->get_logger(), "Reconfiguring using moveJoint");
   }
 
   // Attach the iiwa to the end of the ABB using moveJoint. Notice that the joint transform stays the same.
   // Only the parent changes.
   auto move_joint_cmd = std::make_shared<tesseract_environment::MoveJointCommand>("to_iiwa_mount", "tool0");
   monitor_->applyCommand(move_joint_cmd);
-  ros::spinOnce();
+  //ros::spinOnce();
 
   // Save the scene graph to a file and publish the change
   {
@@ -96,7 +97,7 @@ bool SceneGraphExample::run()
   if (plotting_)
   {
     plotter->waitForInput();
-    ROS_INFO("Reconfiguring using moveLink");
+    RCLCPP_INFO(node_->get_logger(), "Reconfiguring using moveLink");
   }
 
   // Attach the iiwa to the end of the ABB using moveLink.
@@ -110,7 +111,7 @@ bool SceneGraphExample::run()
   new_joint.parent_to_joint_origin_transform.translate(Eigen::Vector3d(0.15, 0.0, 0.0));
   auto move_link_cmd = std::make_shared<tesseract_environment::MoveLinkCommand>(new_joint);
   monitor_->applyCommand(move_link_cmd);
-  ros::spinOnce();
+  //ros::spinOnce();
 
   // Save the scene graph to a file and publish the change
   {
@@ -121,7 +122,7 @@ bool SceneGraphExample::run()
   if (plotting_)
   {
     plotter->waitForInput();
-    ROS_INFO("Open .dot files  in ~/.ros to see scene graph");
+    RCLCPP_INFO(node_->get_logger(), "Open .dot files  in ~/.ros to see scene graph");
   }
   return true;
 }

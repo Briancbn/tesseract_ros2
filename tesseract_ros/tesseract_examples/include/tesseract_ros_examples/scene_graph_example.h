@@ -29,7 +29,7 @@
 
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_monitoring/environment_monitor.h>
@@ -43,7 +43,7 @@ namespace tesseract_ros_examples
 class SceneGraphExample : public Example
 {
 public:
-  SceneGraphExample(const ros::NodeHandle& nh, bool plotting, bool rviz) : Example(plotting, rviz), nh_(nh) {}
+  SceneGraphExample(rclcpp::Node::SharedPtr node, bool plotting, bool rviz) : Example(plotting, rviz), node_(node) {}
   ~SceneGraphExample() override = default;
   SceneGraphExample(const SceneGraphExample&) = default;
   SceneGraphExample& operator=(const SceneGraphExample&) = default;
@@ -53,7 +53,7 @@ public:
   bool run() override;
 
 private:
-  ros::NodeHandle nh_;
+  rclcpp::Node::SharedPtr node_;
 };
 
 }  // namespace tesseract_ros_examples

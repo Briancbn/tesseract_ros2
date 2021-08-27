@@ -28,10 +28,10 @@
 
 #include <tesseract_common/macros.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
-#include <tesseract_msgs/ModifyEnvironment.h>
-#include <tesseract_msgs/GetEnvironmentChanges.h>
-#include <ros/console.h>
-#include <ros/service_client.h>
+#include <tesseract_msgs/srv/modify_environment.hpp>
+#include <tesseract_msgs/srv/get_environment_changes.hpp>
+// #include <ros/console.h>
+#include <rclcpp/subscription.hpp>
 #include <memory>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 

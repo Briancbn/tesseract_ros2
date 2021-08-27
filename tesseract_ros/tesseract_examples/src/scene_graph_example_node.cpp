@@ -30,17 +30,15 @@ using namespace tesseract_ros_examples;
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "scene_graph_example_node");
-  ros::NodeHandle pnh("~");
-  ros::NodeHandle nh;
+  rclcpp::init(argc, argv);
+  auto node = rclcpp::Node::make_shared("scene_graph_example_node");
 
   bool step_through = true;
   bool rviz = true;
 
   // Get ROS Parameters
-  pnh.param("plotting", step_through, step_through);
-  pnh.param("rviz", rviz, rviz);
-
-  SceneGraphExample example(nh, step_through, rviz);
+  // pnh.param("plotting", step_through, step_through);
+  // pnh.param("rviz", rviz, rviz);
+  SceneGraphExample example(node, step_through, rviz);
   example.run();
 }

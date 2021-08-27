@@ -2,93 +2,102 @@ cmake_minimum_required(VERSION 3.5.0)
 project(tesseract_ros_examples VERSION 0.1.0 LANGUAGES CXX)
 
 # ROS packages
+find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_core REQUIRED)
+find_package(ament_index_cpp REQUIRED)
+find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(ament_index_cpp REQUIRED)
-#find_package(tesseract_monitoring REQUIRED)
+find_package(tesseract_monitoring REQUIRED)
 find_package(tesseract_rosutils REQUIRED)
 #find_package(tesseract_planning_server REQUIRED)
 # find_package(octomap_ros REQUIRED)
-find_package(pcl_conversions REQUIRED)
-#find_package(tesseract_msgs REQUIRED)
-find_package(geometry_msgs REQUIRED)
+#find_package(pcl_conversions REQUIRED)
+find_package(tesseract_msgs REQUIRED)
+#find_package(geometry_msgs REQUIRED)
 
 list(FIND CMAKE_CXX_COMPILE_FEATURES cxx_std_17 CXX_FEATURE_FOUND)
 
+include_directories(
+  PUBLIC
+  include
+)
+
 #tesseract_variables()
 
-add_library(${PROJECT_NAME}_basic_cartesian_example SHARED src/basic_cartesian_example.cpp)
-target_link_libraries(${PROJECT_NAME}_basic_cartesian_example PUBLIC
-    tesseract::tesseract_environment_core
-    tesseract::tesseract_environment_ofkt
-    tesseract::tesseract_process_managers
-    ${PCL_LIBRARIES}
-    ${rclcpp_LIBRARIES}
-    ${ament_index_cpp_LIBRARIES}
-    )
-# target_link_libraries(${PROJECT_NAME} nt_ofkt PUBLIC
+# add_library(${PROJECT_NAME}_basic_cartesian_example SHARED src/basic_cartesian_example.cpp)
+# target_link_libraries(${PROJECT_NAME}_basic_cartesian_example PUBLIC
+#     tesseract::tesseract_environment_core
+#     tesseract::tesseract_environment_ofkt
 #     tesseract::tesseract_process_managers
+#     ${PCL_LIBRARIES}
 #     ${rclcpp_LIBRARIES}
 #     ${ament_index_cpp_LIBRARIES}
 #     )
-target_compile_options(${PROJECT_NAME}_basic_cartesian_example PUBLIC
-    ${TESSERACT_COMPILE_OPTIONS}
-    )
-# target_clang_tidy(${PROJECT_NAME}_basic_cartesian_example ARGUMENTS
-#     ${TESSERACT_CLANG_TIDY_ARGS} ENABLE
-#     ${TESSERACT_ENABLE_CLANG_TIDY}
+# # target_link_libraries(${PROJECT_NAME} nt_ofkt PUBLIC
+# #     tesseract::tesseract_process_managers
+# #     ${rclcpp_LIBRARIES}
+# #     ${ament_index_cpp_LIBRARIES}
+# #     )
+# target_compile_options(${PROJECT_NAME}_basic_cartesian_example PUBLIC
+#     ${TESSERACT_COMPILE_OPTIONS}
 #     )
+# # target_clang_tidy(${PROJECT_NAME}_basic_cartesian_example ARGUMENTS
+# #     ${TESSERACT_CLANG_TIDY_ARGS} ENABLE
+# #     ${TESSERACT_ENABLE_CLANG_TIDY}
+# #     )
 
-if(CXX_FEATURE_FOUND EQUAL "-1")
-    target_compile_options(${PROJECT_NAME} PUBLIC -std=c++17)
-else()
-    target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
-endif()
+# if(CXX_FEATURE_FOUND EQUAL "-1")
+#     target_compile_options(${PROJECT_NAME} PUBLIC -std=c++17)
+# else()
+#     target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
+# endif()
 
-foreach(DEF ${PCL_DEFINITIONS})
-  string(STRIP ${DEF} DEF)
-  if (NOT "${DEF}" STREQUAL "")
-    string(SUBSTRING "${DEF}" 0 2 DEF_PREFIX)
-    if ("${DEF_PREFIX}" STREQUAL "-m")
-      string(REPLACE " " ";" DEF ${DEF})
-      foreach(OPTION_DEF ${DEF})
-        target_compile_options(${PROJECT_NAME}_basic_cartesian_example PUBLIC ${OPTION_DEF})
-      endforeach()
-    else()
-      target_compile_definitions(${PROJECT_NAME}_basic_cartesian_example PUBLIC ${DEF})
-    endif()
-  endif()
-endforeach()
-
-target_include_directories(${PROJECT_NAME}_basic_cartesian_example PUBLIC
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-    "$<INSTALL_INTERFACE:include>")
-target_include_directories(${PROJECT_NAME}_basic_cartesian_example SYSTEM PUBLIC
-    ${rclcpp_LIBRARIES}
-    ${ament_index_cpp_LIBRARIES}
-    ${PCL_INCLUDE_DIRS}
-  )
-
-add_executable(${PROJECT_NAME}_basic_cartesian_example_node src/basic_cartesian_example_node.cpp)
-target_link_libraries(${PROJECT_NAME}_basic_cartesian_example_node
-    ${PROJECT_NAME}_basic_cartesian_example
-    ${rclcpp_LIBRARIES}
-    ${ament_index_cpp_LIBRARIES}
-    )
-target_compile_options(${PROJECT_NAME}_basic_cartesian_example_node PRIVATE
-    ${TESSERACT_COMPILE_OPTIONS}
-    )
-# target_clang_tidy(${PROJECT_NAME}_basic_cartesian_example_node ARGUMENTS
-#     ${TESSERACT_CLANG_TIDY_ARGS} ENABLE
-#     ${TESSERACT_ENABLE_CLANG_TIDY}
+# foreach(DEF ${PCL_DEFINITIONS})
+#   string(STRIP ${DEF} DEF)
+#   if (NOT "${DEF}" STREQUAL "")
+#     string(SUBSTRING "${DEF}" 0 2 DEF_PREFIX)
+#     if ("${DEF_PREFIX}" STREQUAL "-m")
+#       string(REPLACE " " ";" DEF ${DEF})
+#       foreach(OPTION_DEF ${DEF})
+#         target_compile_options(${PROJECT_NAME}_basic_cartesian_example PUBLIC ${OPTION_DEF})
+#       endforeach()
+#     else()
+#       target_compile_definitions(${PROJECT_NAME}_basic_cartesian_example PUBLIC ${DEF})
+#     endif()
+#   endif()
+# endforeach()
+#
+# target_include_directories(${PROJECT_NAME}_basic_cartesian_example PUBLIC
+#     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+#     "$<INSTALL_INTERFACE:include>")
+# target_include_directories(${PROJECT_NAME}_basic_cartesian_example SYSTEM PUBLIC
+#     ${rclcpp_LIBRARIES}
+#     ${ament_index_cpp_LIBRARIES}
+#     ${PCL_INCLUDE_DIRS}
+#   )
+#
+# add_executable(${PROJECT_NAME}_basic_cartesian_example_node src/basic_cartesian_example_node.cpp)
+# target_link_libraries(${PROJECT_NAME}_basic_cartesian_example_node
+#     ${PROJECT_NAME}_basic_cartesian_example
+#     ${rclcpp_LIBRARIES}
+#     ${ament_index_cpp_LIBRARIES}
 #     )
-# target_cxx_version(${PROJECT_NAME}_basic_cartesian_example_node PUBLIC VERSION 17)
-target_include_directories(${PROJECT_NAME}_basic_cartesian_example_node PRIVATE
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-    "$<INSTALL_INTERFACE:include>")
-target_include_directories(${PROJECT_NAME}_basic_cartesian_example_node SYSTEM PRIVATE
-    ${rclcpp_LIBRARIES}
-    ${ament_index_cpp_LIBRARIES}
-    )
+# target_compile_options(${PROJECT_NAME}_basic_cartesian_example_node PRIVATE
+#     ${TESSERACT_COMPILE_OPTIONS}
+#     )
+# # target_clang_tidy(${PROJECT_NAME}_basic_cartesian_example_node ARGUMENTS
+# #     ${TESSERACT_CLANG_TIDY_ARGS} ENABLE
+# #     ${TESSERACT_ENABLE_CLANG_TIDY}
+# #     )
+# # target_cxx_version(${PROJECT_NAME}_basic_cartesian_example_node PUBLIC VERSION 17)
+# target_include_directories(${PROJECT_NAME}_basic_cartesian_example_node PRIVATE
+#     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+#     "$<INSTALL_INTERFACE:include>")
+# target_include_directories(${PROJECT_NAME}_basic_cartesian_example_node SYSTEM PRIVATE
+#     ${rclcpp_LIBRARIES}
+#     ${ament_index_cpp_LIBRARIES}
+#     )
 
 # add_library(${PROJECT_NAME}_freespace_ompl_example src/freespace_ompl_example.cpp)
 # target_link_libraries(${PROJECT_NAME}_freespace_ompl_example tesseract::tesseract_environment_core tesseract::tesseract_environment_ofkt tesseract::tesseract_process_managers ${catkin_LIBRARIES})
@@ -297,40 +306,77 @@ target_include_directories(${PROJECT_NAME}_basic_cartesian_example_node SYSTEM P
 # target_include_directories(${PROJECT_NAME}_puzzle_piece_auxillary_axes_example_node SYSTEM PRIVATE
 #     ${catkin_INCLUDE_DIRS})
 #
-# add_library(${PROJECT_NAME}_scene_graph_example src/scene_graph_example.cpp)
-# target_link_libraries(${PROJECT_NAME}_scene_graph_example tesseract::tesseract_environment_core tesseract::tesseract_environment_ofkt tesseract::tesseract_motion_planners_trajopt jsoncpp_lib ${catkin_LIBRARIES})
-# target_compile_options(${PROJECT_NAME}_scene_graph_example PUBLIC ${TESSERACT_COMPILE_OPTIONS})
+add_library(${PROJECT_NAME}_scene_graph_example src/scene_graph_example.cpp)
+target_link_libraries(
+    ${PROJECT_NAME}_scene_graph_example
+    tesseract::tesseract_environment_core
+    tesseract::tesseract_environment_ofkt
+    tesseract::tesseract_motion_planners_trajopt
+    jsoncpp_lib
+    ${rclcpp_LIBRARIES}
+    ${tesseract_msgs_LIBRARIES}
+    ${tesseract_monitoring_LIBRARIES}
+    ${tesseract_rosutils_LIBRARIES}
+    ${tesseract_process_managers_LIBRARIES}
+    )
+target_compile_options(${PROJECT_NAME}_scene_graph_example PUBLIC ${TESSERACT_COMPILE_OPTIONS})
 # target_clang_tidy(${PROJECT_NAME}_scene_graph_example ARGUMENTS ${TESSERACT_CLANG_TIDY_ARGS} ENABLE ${TESSERACT_ENABLE_CLANG_TIDY})
-# target_cxx_version(${PROJECT_NAME}_scene_graph_example PUBLIC VERSION 17)
-# target_include_directories(${PROJECT_NAME}_scene_graph_example PUBLIC
-#     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-#     "$<INSTALL_INTERFACE:include>")
-# target_include_directories(${PROJECT_NAME}_scene_graph_example SYSTEM PUBLIC
-#     ${catkin_INCLUDE_DIRS})
-#
-# add_executable(${PROJECT_NAME}_scene_graph_example_node src/scene_graph_example_node.cpp)
-# target_link_libraries(${PROJECT_NAME}_scene_graph_example_node ${PROJECT_NAME}_scene_graph_example ${catkin_LIBRARIES})
-# target_compile_options(${PROJECT_NAME}_scene_graph_example_node PRIVATE ${TESSERACT_COMPILE_OPTIONS})
-# target_clang_tidy(${PROJECT_NAME}_scene_graph_example_node ARGUMENTS ${TESSERACT_CLANG_TIDY_ARGS} ENABLE ${TESSERACT_ENABLE_CLANG_TIDY})
-# target_cxx_version(${PROJECT_NAME}_scene_graph_example_node PUBLIC VERSION 17)
-# target_include_directories(${PROJECT_NAME}_scene_graph_example_node PRIVATE
-#     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-#     "$<INSTALL_INTERFACE:include>")
-# target_include_directories(${PROJECT_NAME}_scene_graph_example_node SYSTEM PRIVATE
-#     ${catkin_INCLUDE_DIRS})
+if(CXX_FEATURE_FOUND EQUAL "-1")
+    target_compile_options(${PROJECT_NAME}_scene_graph_example PRIVATE -std=c++17)
+else()
+    target_compile_features(${PROJECT_NAME}_scene_graph_example PRIVATE cxx_std_17)
+endif()
+target_include_directories(
+    ${PROJECT_NAME}_scene_graph_example PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>)
+target_include_directories(${PROJECT_NAME}_scene_graph_example SYSTEM PUBLIC
+                           ${rclcpp_INCLUDE_DIRS}
+                           ${tesseract_msgs_INCLUDE_DIRS}
+                           ${tesseract_monitoring_INCLUDE_DIRS}
+                           ${tesseract_rosutils_INCLUDE_DIRS}
+                           ${tesseract_process_managers_INCLUDE_DIRS}
+                          )
+list(APPEND PACKAGE_FILES ${PROJECT_NAME}_scene_graph_example)
 
-list (APPEND PACKAGE_LIBRARIES ${PROJECT_NAME})
+
+add_executable(${PROJECT_NAME}_scene_graph_example_node src/scene_graph_example_node.cpp)
+target_link_libraries(${PROJECT_NAME}_scene_graph_example_node
+                      ${PROJECT_NAME}_scene_graph_example
+                      ${rclcpp_LIBRARIES}
+                      ${tesseract_monitoring_LIBRARIES}
+                      )
+target_compile_options(${PROJECT_NAME}_scene_graph_example_node PRIVATE ${TESSERACT_COMPILE_OPTIONS})
+# target_clang_tidy(${PROJECT_NAME}_scene_graph_example_node ARGUMENTS ${TESSERACT_CLANG_TIDY_ARGS} ENABLE ${TESSERACT_ENABLE_CLANG_TIDY})
+if(CXX_FEATURE_FOUND EQUAL "-1")
+    target_compile_options(${PROJECT_NAME}_scene_graph_example_node PRIVATE -std=c++17)
+else()
+    target_compile_features(${PROJECT_NAME}_scene_graph_example_node PRIVATE cxx_std_17)
+endif()
+target_include_directories(
+    ${PROJECT_NAME}_scene_graph_example_node PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+    )
+target_include_directories(
+    ${PROJECT_NAME}_scene_graph_example_node SYSTEM PRIVATE
+    ${rclcpp_INCLUDE_DIRS}
+    ${tesseract_monitoring_INCLUDE_DIRS}
+    )
+list(APPEND PACKAGE_FILES ${PROJECT_NAME}_scene_graph_example_node)
+
+ament_export_include_directories(include)
 
 ament_export_dependencies(
+    geometry_msgs
+    tesseract_msgs
     rclcpp
     ament_index_cpp
-    #tesseract_monitoring
+    tesseract_monitoring
     tesseract_rosutils
     #tesseract_planning_server
     pcl_conversions
     # octomap_ros
-    geometry_msgs
-
     tesseract_environment
     tesseract_command_language
     tesseract_motion_planners
@@ -342,17 +388,19 @@ ament_export_dependencies(
     PCL
     )
 
-ament_export_include_directories(
-    include
-    ${rclcpp_LIBRARIES}
-    ${ament_index_cpp_LIBRARIES}
-    ${PCL_INCLUDE_DIRS}
-    )
-
+ament_export_libraries(${PROJECT_NAME})
 ament_package()
 
-install(TARGETS ${PACKAGE_LIBRARIES} EXPORT ${PROJECT_NAME}-targets DESTINATION lib)
-install(EXPORT ${PROJECT_NAME}-targets NAMESPACE tesseract:: DESTINATION lib/cmake/${PROJECT_NAME})
+install(
+    TARGETS ${PACKAGE_FILES}
+    EXPORT ${PROJECT_NAME}-targets
+    DESTINATION lib
+    )
+install(
+    EXPORT ${PROJECT_NAME}-targets
+    NAMESPACE tesseract::
+    DESTINATION lib/cmake/${PROJECT_NAME}
+    )
 
 # Mark cpp header files for installation
 install(DIRECTORY include/${PROJECT_NAME}
