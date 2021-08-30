@@ -412,6 +412,15 @@ install(DIRECTORY include/${PROJECT_NAME}
   PATTERN ".svn" EXCLUDE
  )
 
+# Relevant directories
+install(DIRECTORY
+  launch
+  config
+  urdf
+  meshes
+  DESTINATION share/${PROJECT_NAME}
+)
+
 # Create cmake config files
 include(CMakePackageConfigHelpers)
 configure_package_config_file(${CMAKE_CURRENT_LIST_DIR}/cmake/${PROJECT_NAME}-config.cmake.in

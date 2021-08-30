@@ -31,7 +31,10 @@ using namespace tesseract_ros_examples;
 int main(int argc, char** argv)
 {
   rclcpp::init(argc, argv);
-  auto node = rclcpp::Node::make_shared("scene_graph_example_node");
+  rclcpp::NodeOptions node_options;
+  node_options.automatically_declare_parameters_from_overrides(true);
+
+  rclcpp::Node::SharedPtr node = rclcpp::Node::make_shared("scene_graph_example_node",  "", node_options);
 
   bool step_through = true;
   bool rviz = true;

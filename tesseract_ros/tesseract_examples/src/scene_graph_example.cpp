@@ -34,19 +34,12 @@ TESSERACT_COMMON_IGNORE_WARNINGS_POP
 #include <tesseract_rosutils/utils.h>
 #include <tesseract_command_language/command_language.h>
 #include <tesseract_command_language/utils/utils.h>
+#include <tesseract_monitoring/environment_monitor.h>
+
 
 using namespace tesseract_environment;
 using namespace tesseract_scene_graph;
 using namespace tesseract_rosutils;
-
-/** @brief Default ROS parameter for robot description */
-const std::string ROBOT_DESCRIPTION_PARAM = "robot_description";
-
-/** @brief Default ROS parameter for robot description */
-const std::string ROBOT_SEMANTIC_PARAM = "robot_description_semantic";
-
-/** @brief RViz Example Namespace */
-const std::string EXAMPLE_MONITOR_NAMESPACE = "tesseract_ros_examples";
 
 namespace tesseract_ros_examples
 {
@@ -54,9 +47,10 @@ bool SceneGraphExample::run()
 {
   // Initial setup
   std::string urdf_xml_string, srdf_xml_string;
-  // ToDo: Implement parameter
   // node_->get_parameter(ROBOT_DESCRIPTION_PARAM, urdf_xml_string);
   // node_->get_parameter(ROBOT_SEMANTIC_PARAM, srdf_xml_string);
+  urdf_xml_string = node_->get_parameter(ROBOT_DESCRIPTION_PARAM).as_string();
+  srdf_xml_string = node_->get_parameter(ROBOT_SEMANTIC_PARAM).as_string();
 
   ResourceLocator::Ptr locator = std::make_shared<tesseract_rosutils::ROSResourceLocator>();
   if (!env_->init<OFKTStateSolver>(urdf_xml_string, srdf_xml_string, locator))

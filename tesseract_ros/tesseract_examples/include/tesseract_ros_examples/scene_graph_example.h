@@ -32,8 +32,16 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <rclcpp/rclcpp.hpp>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
-#include <tesseract_monitoring/environment_monitor.h>
 #include <tesseract_ros_examples/example.h>
+
+/** @brief Default ROS parameter for robot description */
+const std::string ROBOT_DESCRIPTION_PARAM = "robot_description";
+
+/** @brief Default ROS parameter for robot description */
+const std::string ROBOT_SEMANTIC_PARAM = "robot_description_semantic";
+
+/** @brief RViz Example Namespace */
+const std::string EXAMPLE_MONITOR_NAMESPACE = "tesseract_ros_examples";
 
 namespace tesseract_ros_examples
 {
