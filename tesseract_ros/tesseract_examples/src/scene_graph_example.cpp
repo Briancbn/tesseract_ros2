@@ -64,11 +64,12 @@ bool SceneGraphExample::run()
   // ros::spinOnce();
   {
     auto lock = monitor_->lockEnvironmentRead();
+    RCLCPP_INFO(node_->get_logger(), "Saving dot file...");
     monitor_->getEnvironment()->getSceneGraph()->saveDOT("scene_graph_example.dot");
   }
 
   // Create plotting tool
-  ROSPlottingPtr plotter = std::make_shared<ROSPlotting>(monitor_->getSceneGraph()->getRoot());
+  ROSPlottingPtr plotter = std::make_shared<ROSPlotting>(node_, monitor_->getSceneGraph()->getRoot());
 
   if (plotting_)
   {

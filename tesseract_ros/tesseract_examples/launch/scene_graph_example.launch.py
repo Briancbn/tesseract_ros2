@@ -48,11 +48,24 @@ def generate_launch_description():
     scene_graph_example_node = Node(
             package='tesseract_ros_examples',
             executable=target_pkg+'_scene_graph_example_node',
-            prefix='xterm -e gdb --args',
+            #prefix='xterm -e gdb --args',
             output='screen',
             parameters=[robot_description, robot_description_semantic]
     )
 
+    # RViz
+    rviz_config_file = (get_package_share_directory(target_pkg) +
+                        '/config/examples.rviz')
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        output='log',
+        #arguments=['-d', rviz_config_file],
+        parameters=[robot_description, robot_description_semantic]
+    )
+
     return LaunchDescription([
         scene_graph_example_node,
+        #rviz_node,
         ])
