@@ -48,8 +48,8 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     #${tf2_eigen_LIBRARIES}
     #${tf2_LIBRARIES}
     #${tf2_ros_LIBRARIES}
-    #${visualization_msgs_LIBRARIES}
-    ${Boost_LIBRARIES}
+    ${visualization_msgs_LIBRARIES}
+    # ${Boost_LIBRARIES}
     )
 
 target_compile_options(${PROJECT_NAME} PRIVATE ${TESSERACT_COMPILE_OPTIONS})

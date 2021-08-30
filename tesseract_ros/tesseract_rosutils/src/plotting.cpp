@@ -59,7 +59,7 @@ namespace tesseract_rosutils
 ROSPlotting::ROSPlotting(std::string root_link, std::string topic_namespace)
   : root_link_(root_link), topic_namespace_(topic_namespace), clock_(std::make_shared<rclcpp::Clock>(RCL_ROS_TIME))
 {
-  rclcpp::Node::SharedPtr node_;
+  rclcpp::Node::SharedPtr node_= rclcpp::Node::make_shared("tesseract_rosutils_plotting_node");
   trajectory_pub_ =
       node_->create_publisher<tesseract_msgs::msg::Trajectory>("/display_tesseract_trajectory", 1);
   collisions_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>("/display_collisions", 1);
