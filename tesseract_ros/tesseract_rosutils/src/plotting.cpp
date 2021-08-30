@@ -52,14 +52,13 @@ TESSERACT_COMMON_IGNORE_WARNINGS_POP
 #include <tesseract_visualization/markers/geometry_marker.h>
 #include <tesseract_visualization/markers/toolpath_marker.h>
 
-const std::string LOGGER_ID{"tesseract_rosutils_plotting"};
+const std::string NODE_NAME{"tesseract_rosutils_plotting_node"};
 
 namespace tesseract_rosutils
 {
-ROSPlotting::ROSPlotting(std::string root_link, std::string topic_namespace)
-  : root_link_(root_link), topic_namespace_(topic_namespace), clock_(std::make_shared<rclcpp::Clock>(RCL_ROS_TIME))
+ROSPlotting::ROSPlotting(rclcpp::Node::SharedPtr node, std::string root_link, std::string topic_namespace)
+  : node_(node), root_link_(root_link), topic_namespace_(topic_namespace), clock_(std::make_shared<rclcpp::Clock>(RCL_ROS_TIME))
 {
-  rclcpp::Node::SharedPtr node_= rclcpp::Node::make_shared("tesseract_rosutils_plotting_node");
   trajectory_pub_ =
       node_->create_publisher<tesseract_msgs::msg::Trajectory>("/display_tesseract_trajectory", 1);
   collisions_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>("/display_collisions", 1);
@@ -216,7 +215,7 @@ void ROSPlotting::plotMarker(const tesseract_visualization::Marker& marker, std:
 
 void ROSPlotting::plotMarkers(const std::vector<tesseract_visualization::Marker::Ptr>& /*markers*/, std::string /*ns*/)
 {
-  RCLCPP_ERROR(rclcpp::get_logger(LOGGER_ID), "ROSPlotting: Plotting vector of markers is currently not implemented!");
+  RCLCPP_ERROR(node_->get_logger(), "ROSPlotting: Plotting vector of markers is currently not implemented!");
 }
 
 void ROSPlotting::plotToolpath(tesseract_environment::Environment::ConstPtr env,
@@ -274,16 +273,18 @@ void ROSPlotting::clear(std::string ns)
   //ros::spinOnce();
 }
 
-static void waitForInputAsync(std::string message)
+static void waitForInputAsync(rclcpp::Node::SharedPtr node_, std::string message)
 {
-  RCLCPP_ERROR(rclcpp::get_logger(LOGGER_ID), "%s", message.c_str());
-  std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+  // RCLCPP_INFO(node_->get_logger(), "%s", message.c_str());
+  // std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+  RCLCPP_INFO(node_->get_logger(), "Waiting for 10s before continuing...");
+  rclcpp::sleep_for(std::chrono::seconds(10));
 }
 
 void ROSPlotting::waitForInput(std::string message)
 {
   std::chrono::microseconds timeout(1);
-  std::future<void> future = std::async(std::launch::async, [=]() { waitForInputAsync(message); });
+  std::future<void> future = std::async(std::launch::async, [=]() { waitForInputAsync(node_, message); });
   while (future.wait_for(timeout) != std::future_status::ready){}
     //ros::spinOnce();
 }

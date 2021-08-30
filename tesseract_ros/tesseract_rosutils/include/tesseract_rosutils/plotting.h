@@ -52,7 +52,7 @@ namespace tesseract_rosutils
 class ROSPlotting : public tesseract_visualization::Visualization
 {
 public:
-  ROSPlotting(std::string root_link = "world", std::string topic_namespace = "tesseract");
+  ROSPlotting(rclcpp::Node::SharedPtr node, std::string root_link = "world", std::string topic_namespace = "tesseract");
 
   bool isConnected() const override;
 
@@ -119,6 +119,7 @@ private:
   std::string root_link_;         /**< Root link of markers */
   std::string topic_namespace_;   /**< Namespace used when publishing markers */
   int marker_counter_;            /**< Counter when plotting */
+  rclcpp::Node::SharedPtr node_;
   rclcpp::Clock::SharedPtr clock_;
   //rclcpp::Publisher<tesseract_msgs::msg::SceneGraph>::SharedPtr scene_pub_;      /**< Scene publisher, unused */
   rclcpp::Publisher<tesseract_msgs::msg::Trajectory>::SharedPtr trajectory_pub_; /**< Trajectory publisher */
