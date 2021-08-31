@@ -51,42 +51,48 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <tf2_ros/transform_broadcaster.h>
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
-#include <tesseract/tesseract.h>
+// #include <tesseract/tesseract.h>
 #include <tesseract_environment/core/environment.h>
-#include <tesseract/forward_kinematics_manager.h>
+// #include <tesseract/forward_kinematics_manager.h>
 
 namespace tesseract_monitoring
 {
-typedef std::function<void(const sensor_msgs::msg::JointState::SharedPtr& joint_state)> JointStateUpdateCallback;
+typedef std::function<void(const sensor_msgs::msg::JointState::ConstSharedPtr& joint_state)> JointStateUpdateCallback;
 
 /** @class CurrentStateMonitor
     @brief Monitors the joint_states topic and tf to maintain the current state of the robot. */
 class CurrentStateMonitor
 {
 public:
+  typedef std::shared_ptr<CurrentStateMonitor> Ptr;
+  typedef std::shared_ptr<const CurrentStateMonitor> ConstPtr;
+
   /**
    * @brief Constructor.
    * @param robot_model The current kinematic model to build on
    * @param tf A pointer to the tf transformer to use
    */
-  //  CurrentStateMonitor(const tesseract_environment::Environment::ConstPtr& env,
-  //                      const tesseract::ForwardKinematicsManager::ConstPtr& kinematics_manager);
+  CurrentStateMonitor(const tesseract_environment::Environment::ConstPtr& env);
 
   /** @brief Constructor.
    *  @param robot_model The current kinematic model to build on
    *  @param tf A pointer to the tf transformer to use
    *  @param nh A ros::NodeHandle to pass node specific options
    */
-  CurrentStateMonitor(const tesseract_environment::Environment::ConstPtr& env,
-                      const tesseract::ForwardKinematicsManager::ConstPtr& kinematics_manager,
-                      rclcpp::Node::SharedPtr node);
+  CurrentStateMonitor(const tesseract_environment::Environment::ConstPtr& env, rclcpp::Node::SharedPtr node);
 
   ~CurrentStateMonitor();
+  CurrentStateMonitor(const CurrentStateMonitor&) = delete;
+  CurrentStateMonitor& operator=(const CurrentStateMonitor&) = delete;
+  CurrentStateMonitor(CurrentStateMonitor&&) = delete;
+  CurrentStateMonitor& operator=(CurrentStateMonitor&&) = delete;
 
   /** @brief Start monitoring joint states on a particular topic
-   *  @param joint_states_topic The topic name for joint states (defaults to "joint_states")
-   */
-  void startStateMonitor(const std::string& joint_states_topic = "joint_states");
+    *  @param joint_states_topic The topic name for joint states (defaults to "joint_states")
+    *  @param publish_tf If true, TFs will be published for each joint (similar to robot description publisher). Default:
+    * true
+    */
+  void startStateMonitor(const std::string& joint_states_topic = "joint_states", bool publish_tf = true);
 
   /** @brief Stop monitoring the "joint_states" topic
    */
@@ -176,30 +182,30 @@ public:
   void enableCopyDynamics(bool enabled) { copy_dynamics_ = enabled; }
 
 private:
-  void jointStateCallback(const sensor_msgs::msg::JointState::SharedPtr joint_state);
+  void jointStateCallback(const sensor_msgs::msg::JointState::ConstSharedPtr joint_state);
   bool isPassiveOrMimicDOF(const std::string& dof) const;
 
   rclcpp::Node::SharedPtr node_;
   tesseract_environment::Environment::ConstPtr env_;
   tesseract_environment::EnvState env_state_;
   int last_environment_revision_;
-  tesseract::ForwardKinematicsManager::ConstPtr kinematics_manager_;
+
   std::map<std::string, rclcpp::Time> joint_time_;
   bool state_monitor_started_;
   bool copy_dynamics_;  // Copy velocity and effort from joint_state
   rclcpp::Time monitor_start_time_;
   double error_;
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_subscriber_;
-  tf2_ros::TransformBroadcaster tf_broadcaster_;
+  std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   rclcpp::Time current_state_time_;
   rclcpp::Time last_tf_update_;
+  bool publish_tf_;
 
-  mutable boost::mutex state_update_lock_;
-  mutable boost::condition_variable state_update_condition_;
+  mutable std::mutex state_update_lock_;
+  mutable std::condition_variable state_update_condition_;
   std::vector<JointStateUpdateCallback> update_callbacks_;
 };
-typedef std::shared_ptr<CurrentStateMonitor> CurrentStateMonitorPtr;
-typedef std::shared_ptr<const CurrentStateMonitor> CurrentStateMonitorConstPtr;
+
 }  // namespace tesseract_monitoring
 
 #endif

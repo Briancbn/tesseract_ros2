@@ -41,43 +41,43 @@
 TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 #include <pluginlib/class_loader.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp/publisher.hpp>
+#include <rclcpp/subscription.hpp>
 #include <rclcpp/service.hpp>
-//#include <tf/tf.h>
-//#include <tf/message_filter.h>
 //#include <message_filters/subscriber.h>
-
-#include <condition_variable>
-#include <shared_mutex>
-
-#include <boost/noncopyable.hpp>
-#include <boost/thread.hpp>
-#include <boost/thread/shared_mutex.hpp>
-#include <boost/thread/recursive_mutex.hpp>
 #include <memory>
+#include <boost/thread/shared_mutex.hpp>
+#include <shared_mutex>
+#include <mutex>
+#include <condition_variable>
+#include <boost/thread.hpp>
+#include <functional>
+// #include <boost/noncopyable.hpp>
+// #include <boost/thread/recursive_mutex.hpp>
+
+#include <tesseract_msgs/msg/environment_state.hpp>
 #include <tesseract_msgs/msg/tesseract_state.hpp>
 #include <tesseract_msgs/srv/modify_environment.hpp>
 #include <tesseract_msgs/srv/get_environment_changes.hpp>
 #include <tesseract_msgs/srv/get_environment_information.hpp>
 #include <tesseract_msgs/srv/save_scene_graph.hpp>
+
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
 #include <tesseract_collision/core/discrete_contact_manager.h>
 #include <tesseract_collision/core/continuous_contact_manager.h>
 #include <tesseract_environment/core/environment.h>
-
 #include <tesseract_monitoring/current_state_monitor.h>
-
-//#include <tesseract_rosutils/conversions.h>
-//#include <tesseract_rosutils/utils.h>
-#include <tesseract_rosutils/plotting.h>
-
+#include <tesseract_monitoring/environment_monitor.h>
+#include <tesseract_monitoring/constants.h>
+#include <tesseract_rosutils/utils.h>
 #include <tesseract_scene_graph/graph.h>
 #include <tesseract_urdf/urdf_parser.h>
-#include <tesseract_scene_graph/srdf_model.h>
 #include <tesseract_kinematics/core/forward_kinematics.h>
 
-// TODO: Dynamic reconfigure deprecated in ROS 2. Use parameter updates instead.
-// class DynamicReconfigureImpl;
+//#include <tesseract_rosutils/conversions.h>
+// #include <tesseract_rosutils/plotting.h>
+// #include <tesseract_scene_graph/srdf_model.h>
 
 namespace tesseract_monitoring
 {
@@ -87,117 +87,128 @@ typedef std::shared_ptr<DiscreteContactManagerPluginLoader> DiscreteContactManag
 typedef pluginlib::ClassLoader<tesseract_collision::ContinuousContactManager> ContinuousContactManagerPluginLoader;
 typedef std::shared_ptr<ContinuousContactManagerPluginLoader> ContinuousContactManagerPluginLoaderPtr;
 
+enum class MonitoredEnvironmentMode : int
+{
+  /**
+   * @brief The default behavior when monitoring another environment is the following.
+   *
+   * Case1: If the revision is greater than, it will call a service of the monitored environment to get the changes and
+   *        apply them.
+   * Case2: If the revision is less than, it will reinitialize the environment and request the remaining changes and
+   *        apply them.
+   */
+  DEFAULT = 0,
+
+  /**
+   * @brief The synchronized behavior when monitoring another environment is the following.
+   *
+   * @warning Currently this works best if there is only one monitor which is sychronized becuase currently if two
+   *          environment monitors are synchronized, it currently does not have a way to reason about which ones
+   *          should get applied. Need to research approach for this type of system.
+   *
+   * Case1: If the revision is greater than, it will call a service of the monitored environment to get the changes and
+   *        apply them.
+   * Case2: If the revision is less than, it will call a service of the monitored environment to apply the new changes.
+   */
+  SYNCHRONIZED = 1
+};
+
 /**
  * @brief TesseractMonitor
  * Subscribes to the topic \e tesseract_environment */
-class EnvironmentMonitor : private boost::noncopyable
+class EnvironmentMonitor
 {
 public:
-  enum EnvironmentUpdateType
-  {
-    /** \brief No update */
-    UPDATE_NONE = 0,
-
-    /** \brief The state in the monitored environment was updated */
-    UPDATE_STATE = 1,
-
-    /** \brief The maintained set of fixed transforms in the monitored environment was updated */
-    UPDATE_TRANSFORMS = 2,
-
-    /** \brief The geometry of the environment was updated. This includes receiving new octomaps, collision objects,
-       attached
-       objects, environment geometry, etc. */
-    UPDATE_GEOMETRY = 4,
-
-    /** \brief The entire environment was updated */
-    UPDATE_ENVIRONMENT = 8 + UPDATE_STATE + UPDATE_TRANSFORMS + UPDATE_GEOMETRY
-  };
-
-  /// The name of the topic used by default for receiving joint states
-  static const std::string DEFAULT_JOINT_STATES_TOPIC;  // "/joint_states"
-
-  /// The name of the service used by default for requesting tesseract environment change history
-  static const std::string DEFAULT_GET_ENVIRONMENT_CHANGES_SERVICE;  // "/get_tesseract_changes"
-
-  /// The name of the service used by default for requesting tesseract environment information
-  static const std::string DEFAULT_GET_ENVIRONMENT_INFORMATION_SERVICE;  // "/get_tesseract_information"
-
-  /// The name of the service used by default for setting the full tesseract environment state
-  static const std::string DEFAULT_MODIFY_ENVIRONMENT_SERVICE;  // "/modify_tesseract"
-
-  /// The name of the service used by default for saving the scene graph as a DOT
-  static const std::string DEFAULT_SAVE_SCENE_GRAPH_SERVICE;  //"/save_scene_graph"
-
-  /// The name of the topic used by default for publishing the monitored tesseract environment (this is without "/" in
-  /// the name, so the topic is prefixed by the node name)
-  static const std::string MONITORED_ENVIRONMENT_TOPIC;  // "/monitored_tesseract"
+  typedef std::shared_ptr<EnvironmentMonitor> Ptr;
+  typedef std::shared_ptr<const EnvironmentMonitor> ConstPtr;
 
   /** @brief Constructor
    *  @param robot_description The name of the ROS parameter that contains the URDF (in string format)
-   *  @param tf A pointer to a tf::Transformer
-   *  @param name A name identifying this planning scene monitor
+   *  @param monitor_namespace A name identifying this monitor, must be unique
    */
-  explicit EnvironmentMonitor(const std::string& name, rclcpp::Node::SharedPtr node);
+  EnvironmentMonitor(std::string robot_description,
+                     rclcpp::Node::SharedPtr node,
+                     std::string monitor_namespace,
+                     std::string discrete_plugin = "",
+                     std::string continuous_plugin = "");
 
   /** @brief Constructor
-   *  @param rml A pointer to a kinematic model loader
-   *  @param tf A pointer to a tf::Transformer
-   *  @param name A name identifying this planning scene monitor
+   *  @param monitor_namespace A name identifying this monitor, must be unique
    */
-  //  EnvironmentMonitor(tesseract::Tesseract::Ptr tesseract,
-  //                     const std::string& name,
-  //                     const std::string& discrete_plugin = "",
-  //                     const std::string& continuous_plugin = "");
+  EnvironmentMonitor(tesseract_environment::Environment::Ptr env,
+                     rclcpp::Node::SharedPtr node,
+                     std::string monitor_namespace,
+                     std::string discrete_plugin = "",
+                     std::string continuous_plugin = "");
 
-  virtual ~EnvironmentMonitor();
+  ~EnvironmentMonitor();
+  EnvironmentMonitor(const EnvironmentMonitor&) = delete;
+  EnvironmentMonitor& operator=(const EnvironmentMonitor&) = delete;
+  EnvironmentMonitor(EnvironmentMonitor&&) = delete;
+  EnvironmentMonitor& operator=(EnvironmentMonitor&&) = delete;
 
   /** \brief Get the name of this monitor */
-  const std::string& getName() const { return monitor_name_; }
-  const tesseract_scene_graph::SceneGraph::ConstPtr& getSceneGraph() const
-  {
-    return tesseract_->getEnvironment()->getSceneGraph();
-  }
-  const tesseract_scene_graph::SRDFModel::ConstPtr& getSRDF() const { return tesseract_->getSRDFModelConst(); }
-  /** @brief <b>Avoid this function!</b>  Returns an @b
-   *         unsafe pointer to the current planning scene.
-   * @warning Most likely you do not want to call this function
-   *          directly.  PlanningSceneMonitor has a background thread
-   *          which repeatedly updates and clobbers various contents
-   *          of its internal PlanningScene instance.  This function
-   *          just returns a pointer to that dynamic internal object.
-   *          The correct thing is usually to use a
-   *          LockedPlanningSceneRO or LockedPlanningSceneRW, which
-   *          locks the PlanningSceneMonitor and provides safe access
-   *          to the PlanningScene object.
-   * @see LockedPlanningSceneRO
-   * @see LockedPlanningSceneRW.
-   * @return A pointer to the current planning scene.*/
-  const tesseract_environment::Environment::Ptr& getEnvironment() { return tesseract_->getEnvironment(); }
-  /*! @brief <b>Avoid this function!</b>  Returns an @b
-   *         unsafe pointer to the current planning scene.
-   * @copydetails PlanningSceneMonitor::getPlanningScene() */
-  const tesseract_environment::Environment::ConstPtr& getEnvironment() const
-  {
-    return tesseract_->getEnvironmentConst();
-  }
+  const std::string& getName() const;
 
   /**
-   * @brief Get Tesseract Non Const
-   * @return A shared point to a tesseract object
+   * @brief Wait for connection to upstream environment
+   * @param timeout The duration to wait before returning, if not timeout is provided it waits indefinitely
+   * @return True if it has connected to upstream environment, otherwise false
    */
-  const tesseract::Tesseract::Ptr& getTesseract() { return tesseract_; }
+  bool waitForConnection(double timeout = -1.0) const;
 
   /**
-   * @brief Get Tesseract Const
-   * @return A shared point to a const tesseract object
+   * @brief Apply provided command to the environment owned by this monitor
+   *
+   * @details This should only be used if this monitor is the master. If this is monitoring another environment the
+   * local changes will get removed on the next update cycle. Recommend using the TesseractMonitorInterface to apply
+   * commands to the monitored environment until the todo below is implemented.
+   *
+   * @todo Add similar commands applyCommandUpstream
+   *
+   * @param command The command to apply
+   * @return True if successful, otherwise false
    */
-  tesseract::Tesseract::ConstPtr getTesseractConst() const { return tesseract_; }
+  bool applyCommand(const tesseract_environment::Command::ConstPtr& command);
+  bool applyCommands(const tesseract_environment::Commands& commands);
+
+  /**
+   * @brief Get the scene graph
+   * @return Const SceneGraph
+   */
+  tesseract_scene_graph::SceneGraph::ConstPtr getSceneGraph() const;
+
+  /**
+   * @brief Get the kinematics information
+   * @return Const KinematicsInformatiion
+   */
+  const tesseract_srdf::KinematicsInformation& getKinematicsInformation() const;
+
+  /**
+   * @brief Returns an @b unsafe pointer to the current environment.
+   * @warning TesseractMonitor has a background thread which repeatedly updates and clobbers various contents of its
+   *          internal tesseract instance.  This function just returns a pointer to that dynamic internal object.
+   *          The correct thing is to call lockEnvironmentRead or lockEnvironmentWrite before accessing the contents.
+   * @see lockEnvironmentRead
+   * @see lockEnvironmentWrite
+   * @return A pointer to the current environment.*/
+  tesseract_environment::Environment::Ptr getEnvironment();
+
+  /**
+   * @brief Returns an @b unsafe const pointer to the current environment.
+   * @warning TesseractMonitor has a background thread which repeatedly updates and clobbers various contents of its
+   *          internal tesseract instance.  This function just returns a pointer to that dynamic internal object.
+   *          The correct thing is to call lockEnvironmentRead before accessing the contents.
+   * @see lockEnvironmentRead
+   * @return A pointer to the current environment.*/
+  tesseract_environment::Environment::ConstPtr getEnvironment() const;
 
   /** @brief Return true if the scene \e scene can be updated directly
       or indirectly by this monitor. This function will return true if
       the pointer of the scene is the same as the one maintained,
       or if a parent of the scene is the one maintained. */
   bool updatesEnvironment(const tesseract_environment::Environment::ConstPtr& env) const;
+
   /** @brief Return true if the scene \e scene can be updated directly
       or indirectly by this monitor. This function will return true if
       the pointer of the scene is the same as the one maintained,
@@ -208,12 +219,8 @@ public:
    *  @return An instance of the stored robot description*/
   const std::string& getURDFDescription() const { return robot_description_; }
 
-  /** \brief Start publishing the maintained environment. The first message set out is a complete environment.
-      Diffs are sent afterwards on updates specified by the \e event bitmask. For UPDATE_ENVIRONMENT, the full
-     environment is always
-     sent. */
-  void startPublishingEnvironment(EnvironmentUpdateType event,
-                                  const std::string& environment_topic = MONITORED_ENVIRONMENT_TOPIC);
+  /** \brief Start publishing the maintained environment.*/
+  void startPublishingEnvironment();
 
   /** \brief Stop publishing the maintained environment. */
   void stopPublishingEnvironment();
@@ -222,15 +229,18 @@ public:
   void setEnvironmentPublishingFrequency(double hz);
 
   /** \brief Get the maximum frequency at which environment are published (Hz) */
-  double getEnvironmentPublishingFrequency() const { return publish_environment_frequency_; }
+  double getEnvironmentPublishingFrequency() const;
+
   /** @brief Get the stored instance of the stored current state monitor
    *  @return An instance of the stored current state monitor*/
-  const CurrentStateMonitorPtr& getStateMonitor() const { return current_state_monitor_; }
-  CurrentStateMonitorPtr& getStateMonitorNonConst() { return current_state_monitor_; }
+  CurrentStateMonitor::ConstPtr getStateMonitor() const;
+  CurrentStateMonitor::Ptr getStateMonitor();
+
   /** @brief Start the current state monitor
       @param joint_states_topic the topic to listen to for joint states
-      @param attached_objects_topic the topic to listen to for attached collision objects */
-  void startStateMonitor(const std::string& joint_states_topic = DEFAULT_JOINT_STATES_TOPIC);
+      @param publish_tf If true, TFs will be published for each joint (similar to robot description publisher). Default:
+     true  */
+  void startStateMonitor(const std::string& joint_states_topic = DEFAULT_JOINT_STATES_TOPIC, bool publish_tf = true);
 
   /** @brief Stop the state monitor*/
   void stopStateMonitor();
@@ -248,16 +258,20 @@ public:
   void setStateUpdateFrequency(double hz);
 
   /** @brief Get the maximum frequency (Hz) at which the current state of the planning scene is updated.*/
-  double getStateUpdateFrequency() const
-  {
-    if (dt_state_update_ != std::chrono::duration<double>::zero())
-      return 1.0 / dt_state_update_.count();
-    else
-      return 0.0;
-  }
+  double getStateUpdateFrequency() const;
+
+  /**
+   * @brief Start the monitoring of an environment topic
+   * @param monitored_namespace The namespace of the environment to monitor
+   */
+  void startMonitoringEnvironment(const std::string& monitored_namespace,
+                                  MonitoredEnvironmentMode mode = MonitoredEnvironmentMode::DEFAULT);
+
+  /** \brief Stop monitoring the external environment. */
+  void stopMonitoringEnvironment();
 
   /** @brief Add a function to be called when an update to the scene is received */
-  void addUpdateCallback(const boost::function<void(EnvironmentUpdateType)>& fn);
+  void addUpdateCallback(const std::function<void()>& fn);
 
   /** @brief Clear the functions to be called when an update to the scene is received */
   void clearUpdateCallbacks();
@@ -266,7 +280,7 @@ public:
   const rclcpp::Time& getLastUpdateTime() const { return last_update_time_; }
 
   /** @brief This function is called every time there is a change to the planning scene */
-  void triggerEnvironmentUpdateEvent(EnvironmentUpdateType update_type);
+  void triggerEnvironmentUpdateEvent();
 
   /** \brief Wait for robot state to become more recent than time t.
    *
@@ -276,56 +290,61 @@ public:
   bool waitForCurrentState(const rclcpp::Time& t, double wait_time = 1.);
 
   /** \brief Lock the scene for reading (multiple threads can lock for reading at the same time) */
-  void lockEnvironmentRead();
-
-  /** \brief Unlock the scene from reading (multiple threads can lock for reading at the same time) */
-  void unlockEnvironmentRead();
+  std::shared_lock<std::shared_mutex> lockEnvironmentRead();
 
   /** \brief Lock the scene for writing (only one thread can lock for writing and no other thread can lock for reading)
    */
-  void lockEnvironmentWrite();
-
-  /** \brief Lock the scene from writing (only one thread can lock for writing and no other thread can lock for reading)
-   */
-  void unlockEnvironmentWrite();
+  std::unique_lock<std::shared_mutex> lockEnvironmentWrite();
 
   void clearOctomap();
 
-  void getMonitoredTopics(std::vector<std::string>& topics) const;
+  void getStateMonitoredTopics(std::vector<std::string>& topics) const;
 
-  void postInitialize();
+  /** @brief Shutdown advertised services */
+  void shutdown();
 
 protected:
   /** @brief Initialize the planning scene monitor
    *  @param scene The scene instance to fill with data (an instance is allocated if the one passed in is not allocated)
    */
-  void initialize();
+  bool initialize();
 
+  std::string robot_description_;
   /// The name of this scene monitor
-  std::string monitor_name_;
+  std::string monitor_namespace_;
   std::string discrete_plugin_name_;
   std::string continuous_plugin_name_;
-  std::string joint_state_topic_;
-  std::string monitored_environment_topic_;
 
   DiscreteContactManagerPluginLoaderPtr discrete_manager_loader_;
   ContinuousContactManagerPluginLoaderPtr continuous_manager_loader_;
 
-  tesseract::Tesseract::Ptr tesseract_;
-  boost::shared_mutex scene_update_mutex_;  /// mutex for stored scene
-  rclcpp::Time last_update_time_;           /// Last time the state was updated
-  rclcpp::Time last_robot_motion_time_;     /// Last time the robot has moved
-  bool enforce_next_state_update_;          /// flag to enforce immediate state update in onStateUpdate()
+  tesseract_environment::Environment::Ptr env_;
+  mutable std::shared_mutex scene_update_mutex_;  /// mutex for stored scene
+  rclcpp::Time last_update_time_;                    /// Last time the state was updated
+  rclcpp::Time last_robot_motion_time_;              /// Last time the robot has moved
+  bool enforce_next_state_update_;                /// flag to enforce immediate state update in onStateUpdate()
 
-  std::string robot_description_;
+  // ros::NodeHandle nh_;
+  // ros::NodeHandle root_nh_;
 
   // variables for planning scene publishing
-  rclcpp::Publisher<tesseract_msgs::msg::TesseractState>::SharedPtr environment_publisher_;
-  std::unique_ptr<boost::thread> publish_environment_;
+  rclcpp::Publisher<tesseract_msgs::msg::EnvironmentState>::SharedPtr environment_publisher_;
+
+  std::unique_ptr<std::thread> publish_environment_;
   double publish_environment_frequency_;
-  EnvironmentUpdateType publish_update_types_;
-  EnvironmentUpdateType new_environment_update_;
   std::condition_variable_any new_environment_update_condition_;
+
+  // variables for monitored environment
+  MonitoredEnvironmentMode monitored_environment_mode_;
+  //ros::Subscriber monitored_environment_subscriber_;
+  rclcpp::Subscription<tesseract_msgs::msg::EnvironmentState>::SharedPtr monitored_environment_subscriber_;
+
+  // ros::ServiceClient get_monitored_environment_changes_client_;
+  // ros::ServiceClient get_monitored_environment_information_client_;
+  // ros::ServiceClient modify_monitored_environment_client_;
+  rclcpp::Client<tesseract_msgs::srv::GetEnvironmentChanges>::SharedPtr get_monitored_environment_changes_client_;
+  rclcpp::Client<tesseract_msgs::srv::GetEnvironmentInformation>::SharedPtr get_monitored_environment_information_client_;
+  rclcpp::Client<tesseract_msgs::srv::ModifyEnvironment>::SharedPtr modify_monitored_environment_client_;
 
   // host a service for modifying the environment
   rclcpp::Service<tesseract_msgs::srv::ModifyEnvironment>::SharedPtr modify_environment_server_;
@@ -340,17 +359,18 @@ protected:
   rclcpp::Service<tesseract_msgs::srv::SaveSceneGraph>::SharedPtr save_scene_graph_server_;
 
   // include a current state monitor
-  CurrentStateMonitorPtr current_state_monitor_;
+  CurrentStateMonitor::Ptr current_state_monitor_;
 
   /// lock access to update_callbacks_
-  boost::recursive_mutex update_lock_;
-  std::vector<boost::function<void(EnvironmentUpdateType)> > update_callbacks_;  /// List of callbacks to trigger when
-                                                                                 /// updates are received
+  std::recursive_mutex update_lock_;
+
+  /// List of callbacks to trigger when updates are received
+  std::vector<std::function<void()> > update_callbacks_;
 
 private:
   rclcpp::Node::SharedPtr node_;
-
   rclcpp::Clock::SharedPtr clock_;
+  rclcpp::callback_group::CallbackGroup::SharedPtr callback_group_;
 
   void getUpdatedFrameTransforms(std::vector<geometry_msgs::msg::TransformStamped>& transforms);
 
@@ -358,38 +378,41 @@ private:
   void environmentPublishingThread();
 
   // called by current_state_monitor_ when robot state (as monitored on joint state topic) changes
-  void onStateUpdate(const sensor_msgs::msg::JointState::SharedPtr joint_state);
+  void onJointStateUpdate(const sensor_msgs::msg::JointState::ConstSharedPtr /*joint_state*/);
 
   // called by state_update_timer_ when a state update it pending
-  void stateUpdateTimerCallback();
+  void updateJointStateTimerCallback(/*const rclcpp::WallTimerEvent& event*/);
 
   // Callback for a new state msg
-  void newStateCallback(const std::shared_ptr<tesseract_msgs::msg::TesseractState> env);
+  void newEnvironmentStateCallback(const tesseract_msgs::msg::EnvironmentState::ConstSharedPtr env);
 
   /** @brief Callback for modifying the environment via service request */
-  void modifyEnvironmentCallback(const std::shared_ptr<tesseract_msgs::srv::ModifyEnvironment::Request> req,
-                                 std::shared_ptr<tesseract_msgs::srv::ModifyEnvironment::Response> res);
+  bool modifyEnvironmentCallback(
+    const std::shared_ptr<tesseract_msgs::srv::ModifyEnvironment::Request> req,
+    std::shared_ptr<tesseract_msgs::srv::ModifyEnvironment::Response> res);
 
   /** @brief Callback for get the environment changes via service request */
-  void getEnvironmentChangesCallback(const std::shared_ptr<tesseract_msgs::srv::GetEnvironmentChanges::Request> req,
-                                     std::shared_ptr<tesseract_msgs::srv::GetEnvironmentChanges::Response> res);
+  bool getEnvironmentChangesCallback(
+    const std::shared_ptr<tesseract_msgs::srv::GetEnvironmentChanges::Request> req,
+    std::shared_ptr<tesseract_msgs::srv::GetEnvironmentChanges::Response> res);
 
   /** @brief Callback for get the environment information via service request */
-  void
-  getEnvironmentInformationCallback(const std::shared_ptr<tesseract_msgs::srv::GetEnvironmentInformation::Request> req,
-                                    std::shared_ptr<tesseract_msgs::srv::GetEnvironmentInformation::Response> res);
+  bool getEnvironmentInformationCallback(
+    const std::shared_ptr<tesseract_msgs::srv::GetEnvironmentInformation::Request> req,
+    std::shared_ptr<tesseract_msgs::srv::GetEnvironmentInformation::Response> res);
 
   /** @brief Callback to save the scene graph to a DOT via a service request */
-  void saveSceneGraphCallback(const std::shared_ptr<tesseract_msgs::srv::SaveSceneGraph::Request> req,
-                              std::shared_ptr<tesseract_msgs::srv::SaveSceneGraph::Response> res);
+  bool saveSceneGraphCallback(
+    const std::shared_ptr<tesseract_msgs::srv::SaveSceneGraph::Request> req,
+    std::shared_ptr<tesseract_msgs::srv::SaveSceneGraph::Response> res);
 
   // Called when new service request is called to modify the environment.
-  bool applyEnvironmentCommandsMessage(std::string id,
+  bool applyEnvironmentCommandsMessage(const std::string& id,
                                        int revision,
                                        const std::vector<tesseract_msgs::msg::EnvironmentCommand>& commands);
 
   // Lock for state_update_pending_ and dt_state_update_
-  boost::mutex state_pending_mutex_;
+  std::mutex state_pending_mutex_;
 
   /// True when we need to update the RobotState from current_state_monitor_
   // This field is protected by state_pending_mutex_
@@ -412,129 +435,460 @@ private:
   /// Last time the state was updated from current_state_monitor_
   // Only access this from callback functions (and constructor)
   rclcpp::Time last_robot_state_update_wall_time_;
-
-  //  DynamicReconfigureImpl* reconfigure_impl_;
-
-  rclcpp::callback_group::CallbackGroup::SharedPtr callback_group_;
-};
-typedef std::shared_ptr<EnvironmentMonitor> EnvironmentMonitorPtr;
-typedef std::shared_ptr<const EnvironmentMonitor> EnvironmentMonitorConstPtr;
-
-/** \brief This is a convenience class for obtaining access to an
- *         instance of a locked Environment.
- *
- * Instances of this class can be used almost exactly like instances
- * of a ROSBasicEnvPtr because of the typecast operator and
- * "operator->" functions.  Therefore you will often see code like this:
- * @code
- *   environment_monitor::LockedEnvironmentRO ls(environment_monitor);
- *   const tesseract_ros::ROSBasicEnvPtr& env = ls->getEnvironment();
- * @endcode
-
- * The function "getEnvironment()" is a member of EnvironmentMonitor and not
- * a member of this class.  However because of the "operator->" here
- * which returns a ROSBasicEnvConstPtr, this works.
- *
- * Any number of these "ReadOnly" locks can exist at a given time.
- * The intention is that users which only need to read from the
- * ROSBasicEnvPtr will use these and will thus not interfere with each
- * other.
- *
- * @see LockedEnvironmentRW */
-class LockedEnvironmentRO
-{
-public:
-  LockedEnvironmentRO(const EnvironmentMonitorPtr& environment_monitor) : env_monitor_(environment_monitor)
-  {
-    initialize(true);
-  }
-
-  const EnvironmentMonitorPtr& getEnvironmentMonitor() { return env_monitor_; }
-  operator bool() const { return env_monitor_ && env_monitor_->getEnvironment(); }
-  operator const tesseract_environment::Environment::ConstPtr&() const
-  {
-    return static_cast<const EnvironmentMonitor*>(env_monitor_.get())->getEnvironment();
-  }
-
-  const tesseract_environment::Environment::ConstPtr& operator->() const
-  {
-    return static_cast<const EnvironmentMonitor*>(env_monitor_.get())->getEnvironment();
-  }
-
-protected:
-  LockedEnvironmentRO(const EnvironmentMonitorPtr& environment_monitor, bool read_only)
-    : env_monitor_(environment_monitor)
-  {
-    initialize(read_only);
-  }
-
-  void initialize(bool read_only)
-  {
-    if (env_monitor_)
-      lock_.reset(new SingleUnlock(env_monitor_.get(), read_only));
-  }
-
-  // we use this struct so that lock/unlock are called only once
-  // even if the LockedPlanningScene instance is copied around
-  struct SingleUnlock
-  {
-    SingleUnlock(EnvironmentMonitor* environment_monitor, bool read_only)
-      : env_monitor_(environment_monitor), read_only_(read_only)
-    {
-      if (read_only)
-        env_monitor_->lockEnvironmentRead();
-      else
-        env_monitor_->lockEnvironmentWrite();
-    }
-    ~SingleUnlock()
-    {
-      if (read_only_)
-        env_monitor_->unlockEnvironmentRead();
-      else
-        env_monitor_->unlockEnvironmentWrite();
-    }
-    EnvironmentMonitor* env_monitor_;
-    bool read_only_;
-  };
-  typedef std::shared_ptr<SingleUnlock> SingleUnlockPtr;
-  typedef std::shared_ptr<const SingleUnlock> SingleUnlockConstPtr;
-
-  EnvironmentMonitorPtr env_monitor_;
-  SingleUnlockPtr lock_;
 };
 
-/** \brief This is a convenience class for obtaining access to an
- *         instance of a locked Environment.
- *
- * Instances of this class can be used almost exactly like instances
- * of a EnvironmentMonitorPtr because of the typecast operator and
- * "operator->" functions.  Therefore you will often see code like this:
- * @code
- *   environment_monitor::LockedEnvironmentRW ls(environment_monitor);
- *   const tesseract_ros::ROSBasicEnvPtr& env = ls->getEnvironment();
- * @endcode
-
- * The function "getEnvironment()" is a member of EnvironmentMonitor and not
- * a member of this class.  However because of the "operator->" here
- * which returns a ROSBasicEnvPtr, this works.
- *
- * Only one of these "ReadWrite" locks can exist at a given time.  The
- * intention is that users which need to write to the ROSBasicEnv
- * will use these, preventing other writers and readers from locking
- * the same PlanningScene at the same time.
- *
- * @see LockedEnvironmentRO */
-class LockedEnvironmentRW : public LockedEnvironmentRO
-{
-public:
-  LockedEnvironmentRW(const EnvironmentMonitorPtr& environment_monitor)
-    : LockedEnvironmentRO(environment_monitor, false)
-  {
-  }
-
-  operator const tesseract_environment::Environment::Ptr&() { return env_monitor_->getEnvironment(); }
-  const tesseract_environment::Environment::Ptr& operator->() { return env_monitor_->getEnvironment(); }
-};
 }  // namespace tesseract_monitoring
 
 #endif
+
+// /**
+//  * @brief TesseractMonitor
+//  * Subscribes to the topic \e tesseract_environment */
+// class EnvironmentMonitor : private boost::noncopyable
+// {
+// public:
+//   enum EnvironmentUpdateType
+//   {
+//     /** \brief No update */
+//     UPDATE_NONE = 0,
+//
+//     /** \brief The state in the monitored environment was updated */
+//     UPDATE_STATE = 1,
+//
+//     /** \brief The maintained set of fixed transforms in the monitored environment was updated */
+//     UPDATE_TRANSFORMS = 2,
+//
+//     /** \brief The geometry of the environment was updated. This includes receiving new octomaps, collision objects,
+//        attached
+//        objects, environment geometry, etc. */
+//     UPDATE_GEOMETRY = 4,
+//
+//     /** \brief The entire environment was updated */
+//     UPDATE_ENVIRONMENT = 8 + UPDATE_STATE + UPDATE_TRANSFORMS + UPDATE_GEOMETRY
+//   };
+//
+//   /// The name of the topic used by default for receiving joint states
+//   static const std::string DEFAULT_JOINT_STATES_TOPIC;  // "/joint_states"
+//
+//   /// The name of the service used by default for requesting tesseract environment change history
+//   static const std::string DEFAULT_GET_ENVIRONMENT_CHANGES_SERVICE;  // "/get_tesseract_changes"
+//
+//   /// The name of the service used by default for requesting tesseract environment information
+//   static const std::string DEFAULT_GET_ENVIRONMENT_INFORMATION_SERVICE;  // "/get_tesseract_information"
+//
+//   /// The name of the service used by default for setting the full tesseract environment state
+//   static const std::string DEFAULT_MODIFY_ENVIRONMENT_SERVICE;  // "/modify_tesseract"
+//
+//   /// The name of the service used by default for saving the scene graph as a DOT
+//   static const std::string DEFAULT_SAVE_SCENE_GRAPH_SERVICE;  //"/save_scene_graph"
+//
+//   /// The name of the topic used by default for publishing the monitored tesseract environment (this is without "/" in
+//   /// the name, so the topic is prefixed by the node name)
+//   static const std::string MONITORED_ENVIRONMENT_TOPIC;  // "/monitored_tesseract"
+//
+//   /** @brief Constructor
+//    *  @param robot_description The name of the ROS parameter that contains the URDF (in string format)
+//    *  @param tf A pointer to a tf::Transformer
+//    *  @param name A name identifying this planning scene monitor
+//    */
+//   explicit EnvironmentMonitor(const std::string& name, rclcpp::Node::SharedPtr node);
+//
+//   /** @brief Constructor
+//    *  @param rml A pointer to a kinematic model loader
+//    *  @param tf A pointer to a tf::Transformer
+//    *  @param name A name identifying this planning scene monitor
+//    */
+//   //  EnvironmentMonitor(tesseract::Tesseract::Ptr tesseract,
+//   //                     const std::string& name,
+//   //                     const std::string& discrete_plugin = "",
+//   //                     const std::string& continuous_plugin = "");
+//
+//   virtual ~EnvironmentMonitor();
+//
+//   /** \brief Get the name of this monitor */
+//   const std::string& getName() const { return monitor_name_; }
+//   const tesseract_scene_graph::SceneGraph::ConstPtr& getSceneGraph() const
+//   {
+//     return tesseract_->getEnvironment()->getSceneGraph();
+//   }
+//   const tesseract_scene_graph::SRDFModel::ConstPtr& getSRDF() const { return tesseract_->getSRDFModelConst(); }
+//   /** @brief <b>Avoid this function!</b>  Returns an @b
+//    *         unsafe pointer to the current planning scene.
+//    * @warning Most likely you do not want to call this function
+//    *          directly.  PlanningSceneMonitor has a background thread
+//    *          which repeatedly updates and clobbers various contents
+//    *          of its internal PlanningScene instance.  This function
+//    *          just returns a pointer to that dynamic internal object.
+//    *          The correct thing is usually to use a
+//    *          LockedPlanningSceneRO or LockedPlanningSceneRW, which
+//    *          locks the PlanningSceneMonitor and provides safe access
+//    *          to the PlanningScene object.
+//    * @see LockedPlanningSceneRO
+//    * @see LockedPlanningSceneRW.
+//    * @return A pointer to the current planning scene.*/
+//   const tesseract_environment::Environment::Ptr& getEnvironment() { return tesseract_->getEnvironment(); }
+//   /*! @brief <b>Avoid this function!</b>  Returns an @b
+//    *         unsafe pointer to the current planning scene.
+//    * @copydetails PlanningSceneMonitor::getPlanningScene() */
+//   const tesseract_environment::Environment::ConstPtr& getEnvironment() const
+//   {
+//     return tesseract_->getEnvironmentConst();
+//   }
+//
+//   /**
+//    * @brief Get Tesseract Non Const
+//    * @return A shared point to a tesseract object
+//    */
+//   const tesseract::Tesseract::Ptr& getTesseract() { return tesseract_; }
+//
+//   /**
+//    * @brief Get Tesseract Const
+//    * @return A shared point to a const tesseract object
+//    */
+//   tesseract::Tesseract::ConstPtr getTesseractConst() const { return tesseract_; }
+//
+//   /** @brief Return true if the scene \e scene can be updated directly
+//       or indirectly by this monitor. This function will return true if
+//       the pointer of the scene is the same as the one maintained,
+//       or if a parent of the scene is the one maintained. */
+//   bool updatesEnvironment(const tesseract_environment::Environment::ConstPtr& env) const;
+//   /** @brief Return true if the scene \e scene can be updated directly
+//       or indirectly by this monitor. This function will return true if
+//       the pointer of the scene is the same as the one maintained,
+//       or if a parent of the scene is the one maintained. */
+//   bool updatesEnvironment(const tesseract_environment::Environment::Ptr& env) const;
+//
+//   /** @brief Get the stored robot description
+//    *  @return An instance of the stored robot description*/
+//   const std::string& getURDFDescription() const { return robot_description_; }
+//
+//   /** \brief Start publishing the maintained environment. The first message set out is a complete environment.
+//       Diffs are sent afterwards on updates specified by the \e event bitmask. For UPDATE_ENVIRONMENT, the full
+//      environment is always
+//      sent. */
+//   void startPublishingEnvironment(EnvironmentUpdateType event,
+//                                   const std::string& environment_topic = MONITORED_ENVIRONMENT_TOPIC);
+//
+//   /** \brief Stop publishing the maintained environment. */
+//   void stopPublishingEnvironment();
+//
+//   /** \brief Set the maximum frequency at which environment are being published */
+//   void setEnvironmentPublishingFrequency(double hz);
+//
+//   /** \brief Get the maximum frequency at which environment are published (Hz) */
+//   double getEnvironmentPublishingFrequency() const { return publish_environment_frequency_; }
+//   /** @brief Get the stored instance of the stored current state monitor
+//    *  @return An instance of the stored current state monitor*/
+//   const CurrentStateMonitorPtr& getStateMonitor() const { return current_state_monitor_; }
+//   CurrentStateMonitorPtr& getStateMonitorNonConst() { return current_state_monitor_; }
+//   /** @brief Start the current state monitor
+//       @param joint_states_topic the topic to listen to for joint states
+//       @param attached_objects_topic the topic to listen to for attached collision objects */
+//   void startStateMonitor(const std::string& joint_states_topic = DEFAULT_JOINT_STATES_TOPIC);
+//
+//   /** @brief Stop the state monitor*/
+//   void stopStateMonitor();
+//
+//   /** @brief Update the scene using the monitored state. This function is automatically called when an update to the
+//      current state is received (if startStateMonitor() has been called).
+//       The updates are throttled to a maximum update frequency however, which is set by setStateUpdateFrequency(). */
+//   void updateEnvironmentWithCurrentState();
+//
+//   /** @brief Update the scene using the monitored state at a specified frequency, in Hz. This function has an effect
+//      only when updates from the CurrentStateMonitor are received at a higher frequency.
+//       In that case, the updates are throttled down, so that they do not exceed a maximum update frequency specified
+//      here.
+//       @param hz the update frequency. By default this is 10Hz. */
+//   void setStateUpdateFrequency(double hz);
+//
+//   /** @brief Get the maximum frequency (Hz) at which the current state of the planning scene is updated.*/
+//   double getStateUpdateFrequency() const
+//   {
+//     if (dt_state_update_ != std::chrono::duration<double>::zero())
+//       return 1.0 / dt_state_update_.count();
+//     else
+//       return 0.0;
+//   }
+//
+//   /** @brief Add a function to be called when an update to the scene is received */
+//   void addUpdateCallback(const boost::function<void(EnvironmentUpdateType)>& fn);
+//
+//   /** @brief Clear the functions to be called when an update to the scene is received */
+//   void clearUpdateCallbacks();
+//
+//   /** \brief Return the time when the last update was made to the planning scene (by \e any monitor) */
+//   const rclcpp::Time& getLastUpdateTime() const { return last_update_time_; }
+//
+//   /** @brief This function is called every time there is a change to the planning scene */
+//   void triggerEnvironmentUpdateEvent(EnvironmentUpdateType update_type);
+//
+//   /** \brief Wait for robot state to become more recent than time t.
+//    *
+//    * If there is no state monitor active, there will be no scene updates.
+//    * Hence, you can specify a timeout to wait for those updates. Default is 1s.
+//    */
+//   bool waitForCurrentState(const rclcpp::Time& t, double wait_time = 1.);
+//
+//   /** \brief Lock the scene for reading (multiple threads can lock for reading at the same time) */
+//   void lockEnvironmentRead();
+//
+//   /** \brief Unlock the scene from reading (multiple threads can lock for reading at the same time) */
+//   void unlockEnvironmentRead();
+//
+//   /** \brief Lock the scene for writing (only one thread can lock for writing and no other thread can lock for reading)
+//    */
+//   void lockEnvironmentWrite();
+//
+//   /** \brief Lock the scene from writing (only one thread can lock for writing and no other thread can lock for reading)
+//    */
+//   void unlockEnvironmentWrite();
+//
+//   void clearOctomap();
+//
+//   void getMonitoredTopics(std::vector<std::string>& topics) const;
+//
+//   void postInitialize();
+//
+// protected:
+//   /** @brief Initialize the planning scene monitor
+//    *  @param scene The scene instance to fill with data (an instance is allocated if the one passed in is not allocated)
+//    */
+//   void initialize();
+//
+//   /// The name of this scene monitor
+//   std::string monitor_name_;
+//   std::string discrete_plugin_name_;
+//   std::string continuous_plugin_name_;
+//   std::string joint_state_topic_;
+//   std::string monitored_environment_topic_;
+//
+//   DiscreteContactManagerPluginLoaderPtr discrete_manager_loader_;
+//   ContinuousContactManagerPluginLoaderPtr continuous_manager_loader_;
+//
+//   tesseract::Tesseract::Ptr tesseract_;
+//   boost::shared_mutex scene_update_mutex_;  /// mutex for stored scene
+//   rclcpp::Time last_update_time_;           /// Last time the state was updated
+//   rclcpp::Time last_robot_motion_time_;     /// Last time the robot has moved
+//   bool enforce_next_state_update_;          /// flag to enforce immediate state update in onStateUpdate()
+//
+//   std::string robot_description_;
+//
+//   // variables for planning scene publishing
+//   rclcpp::Publisher<tesseract_msgs::msg::TesseractState>::SharedPtr environment_publisher_;
+//   std::unique_ptr<boost::thread> publish_environment_;
+//   double publish_environment_frequency_;
+//   EnvironmentUpdateType publish_update_types_;
+//   EnvironmentUpdateType new_environment_update_;
+//   std::condition_variable_any new_environment_update_condition_;
+//
+//   // host a service for modifying the environment
+//   rclcpp::Service<tesseract_msgs::srv::ModifyEnvironment>::SharedPtr modify_environment_server_;
+//
+//   // host a service for getting the environment changes
+//   rclcpp::Service<tesseract_msgs::srv::GetEnvironmentChanges>::SharedPtr get_environment_changes_server_;
+//
+//   // host a service for getting the environment information
+//   rclcpp::Service<tesseract_msgs::srv::GetEnvironmentInformation>::SharedPtr get_environment_information_server_;
+//
+//   // host a service for saving the scene graph to a DOT file
+//   rclcpp::Service<tesseract_msgs::srv::SaveSceneGraph>::SharedPtr save_scene_graph_server_;
+//
+//   // include a current state monitor
+//   CurrentStateMonitorPtr current_state_monitor_;
+//
+//   /// lock access to update_callbacks_
+//   boost::recursive_mutex update_lock_;
+//   std::vector<boost::function<void(EnvironmentUpdateType)> > update_callbacks_;  /// List of callbacks to trigger when
+//                                                                                  /// updates are received
+//
+// private:
+//   rclcpp::Node::SharedPtr node_;
+//
+//   rclcpp::Clock::SharedPtr clock_;
+//
+//   void getUpdatedFrameTransforms(std::vector<geometry_msgs::msg::TransformStamped>& transforms);
+//
+//   // publish environment update diffs (runs in its own thread)
+//   void environmentPublishingThread();
+//
+//   // called by current_state_monitor_ when robot state (as monitored on joint state topic) changes
+//   void onStateUpdate(const sensor_msgs::msg::JointState::SharedPtr joint_state);
+//
+//   // called by state_update_timer_ when a state update it pending
+//   void stateUpdateTimerCallback();
+//
+//   // Callback for a new state msg
+//   void newStateCallback(const std::shared_ptr<tesseract_msgs::msg::TesseractState> env);
+//
+//   /** @brief Callback for modifying the environment via service request */
+//   void modifyEnvironmentCallback(const std::shared_ptr<tesseract_msgs::srv::ModifyEnvironment::Request> req,
+//                                  std::shared_ptr<tesseract_msgs::srv::ModifyEnvironment::Response> res);
+//
+//   /** @brief Callback for get the environment changes via service request */
+//   void getEnvironmentChangesCallback(const std::shared_ptr<tesseract_msgs::srv::GetEnvironmentChanges::Request> req,
+//                                      std::shared_ptr<tesseract_msgs::srv::GetEnvironmentChanges::Response> res);
+//
+//   /** @brief Callback for get the environment information via service request */
+//   void
+//   getEnvironmentInformationCallback(const std::shared_ptr<tesseract_msgs::srv::GetEnvironmentInformation::Request> req,
+//                                     std::shared_ptr<tesseract_msgs::srv::GetEnvironmentInformation::Response> res);
+//
+//   /** @brief Callback to save the scene graph to a DOT via a service request */
+//   void saveSceneGraphCallback(const std::shared_ptr<tesseract_msgs::srv::SaveSceneGraph::Request> req,
+//                               std::shared_ptr<tesseract_msgs::srv::SaveSceneGraph::Response> res);
+//
+//   // Called when new service request is called to modify the environment.
+//   bool applyEnvironmentCommandsMessage(std::string id,
+//                                        int revision,
+//                                        const std::vector<tesseract_msgs::msg::EnvironmentCommand>& commands);
+//
+//   // Lock for state_update_pending_ and dt_state_update_
+//   boost::mutex state_pending_mutex_;
+//
+//   /// True when we need to update the RobotState from current_state_monitor_
+//   // This field is protected by state_pending_mutex_
+//   volatile bool state_update_pending_;
+//
+//   /// the amount of time to wait in between updates to the robot state
+//   // This field is protected by state_pending_mutex_
+//   std::chrono::duration<double> dt_state_update_;
+//
+//   /// the amount of time to wait when looking up transforms
+//   // Setting this to a non-zero value resolves issues when the sensor data is
+//   // arriving so fast that it is preceding the transform state.
+//   rclcpp::Duration shape_transform_cache_lookup_wait_time_;
+//
+//   /// timer for state updates.
+//   // Check if last_state_update_ is true and if so call updateSceneWithCurrentState()
+//   // Not safe to access from callback functions.
+//   rclcpp::TimerBase::SharedPtr state_update_timer_;
+//
+//   /// Last time the state was updated from current_state_monitor_
+//   // Only access this from callback functions (and constructor)
+//   rclcpp::Time last_robot_state_update_wall_time_;
+//
+//   //  DynamicReconfigureImpl* reconfigure_impl_;
+//
+//   rclcpp::callback_group::CallbackGroup::SharedPtr callback_group_;
+// };
+// typedef std::shared_ptr<EnvironmentMonitor> EnvironmentMonitorPtr;
+// typedef std::shared_ptr<const EnvironmentMonitor> EnvironmentMonitorConstPtr;
+//
+// /** \brief This is a convenience class for obtaining access to an
+//  *         instance of a locked Environment.
+//  *
+//  * Instances of this class can be used almost exactly like instances
+//  * of a ROSBasicEnvPtr because of the typecast operator and
+//  * "operator->" functions.  Therefore you will often see code like this:
+//  * @code
+//  *   environment_monitor::LockedEnvironmentRO ls(environment_monitor);
+//  *   const tesseract_ros::ROSBasicEnvPtr& env = ls->getEnvironment();
+//  * @endcode
+//
+//  * The function "getEnvironment()" is a member of EnvironmentMonitor and not
+//  * a member of this class.  However because of the "operator->" here
+//  * which returns a ROSBasicEnvConstPtr, this works.
+//  *
+//  * Any number of these "ReadOnly" locks can exist at a given time.
+//  * The intention is that users which only need to read from the
+//  * ROSBasicEnvPtr will use these and will thus not interfere with each
+//  * other.
+//  *
+//  * @see LockedEnvironmentRW */
+// class LockedEnvironmentRO
+// {
+// public:
+//   LockedEnvironmentRO(const EnvironmentMonitorPtr& environment_monitor) : env_monitor_(environment_monitor)
+//   {
+//     initialize(true);
+//   }
+//
+//   const EnvironmentMonitorPtr& getEnvironmentMonitor() { return env_monitor_; }
+//   operator bool() const { return env_monitor_ && env_monitor_->getEnvironment(); }
+//   operator const tesseract_environment::Environment::ConstPtr&() const
+//   {
+//     return static_cast<const EnvironmentMonitor*>(env_monitor_.get())->getEnvironment();
+//   }
+//
+//   const tesseract_environment::Environment::ConstPtr& operator->() const
+//   {
+//     return static_cast<const EnvironmentMonitor*>(env_monitor_.get())->getEnvironment();
+//   }
+//
+// protected:
+//   LockedEnvironmentRO(const EnvironmentMonitorPtr& environment_monitor, bool read_only)
+//     : env_monitor_(environment_monitor)
+//   {
+//     initialize(read_only);
+//   }
+//
+//   void initialize(bool read_only)
+//   {
+//     if (env_monitor_)
+//       lock_.reset(new SingleUnlock(env_monitor_.get(), read_only));
+//   }
+//
+//   // we use this struct so that lock/unlock are called only once
+//   // even if the LockedPlanningScene instance is copied around
+//   struct SingleUnlock
+//   {
+//     SingleUnlock(EnvironmentMonitor* environment_monitor, bool read_only)
+//       : env_monitor_(environment_monitor), read_only_(read_only)
+//     {
+//       if (read_only)
+//         env_monitor_->lockEnvironmentRead();
+//       else
+//         env_monitor_->lockEnvironmentWrite();
+//     }
+//     ~SingleUnlock()
+//     {
+//       if (read_only_)
+//         env_monitor_->unlockEnvironmentRead();
+//       else
+//         env_monitor_->unlockEnvironmentWrite();
+//     }
+//     EnvironmentMonitor* env_monitor_;
+//     bool read_only_;
+//   };
+//   typedef std::shared_ptr<SingleUnlock> SingleUnlockPtr;
+//   typedef std::shared_ptr<const SingleUnlock> SingleUnlockConstPtr;
+//
+//   EnvironmentMonitorPtr env_monitor_;
+//   SingleUnlockPtr lock_;
+// };
+//
+// /** \brief This is a convenience class for obtaining access to an
+//  *         instance of a locked Environment.
+//  *
+//  * Instances of this class can be used almost exactly like instances
+//  * of a EnvironmentMonitorPtr because of the typecast operator and
+//  * "operator->" functions.  Therefore you will often see code like this:
+//  * @code
+//  *   environment_monitor::LockedEnvironmentRW ls(environment_monitor);
+//  *   const tesseract_ros::ROSBasicEnvPtr& env = ls->getEnvironment();
+//  * @endcode
+//
+//  * The function "getEnvironment()" is a member of EnvironmentMonitor and not
+//  * a member of this class.  However because of the "operator->" here
+//  * which returns a ROSBasicEnvPtr, this works.
+//  *
+//  * Only one of these "ReadWrite" locks can exist at a given time.  The
+//  * intention is that users which need to write to the ROSBasicEnv
+//  * will use these, preventing other writers and readers from locking
+//  * the same PlanningScene at the same time.
+//  *
+//  * @see LockedEnvironmentRO */
+// class LockedEnvironmentRW : public LockedEnvironmentRO
+// {
+// public:
+//   LockedEnvironmentRW(const EnvironmentMonitorPtr& environment_monitor)
+//     : LockedEnvironmentRO(environment_monitor, false)
+//   {
+//   }
+//
+//   operator const tesseract_environment::Environment::Ptr&() { return env_monitor_->getEnvironment(); }
+//   const tesseract_environment::Environment::Ptr& operator->() { return env_monitor_->getEnvironment(); }
+// };
+// }  // namespace tesseract_monitoring
+//
+// #endif
