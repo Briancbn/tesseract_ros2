@@ -164,7 +164,6 @@ target_include_directories(${PROJECT_NAME}_environment_node
 target_include_directories(${PROJECT_NAME}_environment_node SYSTEM PUBLIC
                            ${rclcpp_INCLUDE_DIRS}
                           )
-list(APPEND PACKAGE_LIBRARIES ${PROJECT_NAME}_environment_node)
 
 # Demo Node
 add_executable(demo_scene demos/demo_scene.cpp)
@@ -189,7 +188,6 @@ target_include_directories(
     ${rclcpp_INCLUDE_DIRS}
     ${tesseract_msgs_INCLUDE_DIRS}
     )
-list(APPEND PACKAGE_LIBRARIES demo_scene)
 
 ament_export_dependencies(
     EIGEN3
@@ -212,6 +210,7 @@ ament_package()
 
 message(INFO "Pkg list:" ${PACKAGE_LIBRARIES})
 
+# Install libraries
 install(
     TARGETS ${PACKAGE_LIBRARIES}
     EXPORT ${PROJECT_NAME}-targets
@@ -222,12 +221,11 @@ install(
     NAMESPACE tesseract::
     DESTINATION lib/cmake/${PROJECT_NAME})
 
-# install(TARGETS
-#    ${PROJECT_NAME}_environment
-#    ${PROJECT_NAME}_contacts
-#    ${PROJECT_NAME}_environment_node
-#    demo_scene
-#    DESTINATION lib/${PROJECT_NAME})
+# Install executable(s)
+install(TARGETS
+   ${PROJECT_NAME}_environment_node
+   demo_scene
+   DESTINATION lib/${PROJECT_NAME})
 
 # Mark cpp header files for installation
 install(DIRECTORY include/${PROJECT_NAME}
