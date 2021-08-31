@@ -312,10 +312,10 @@ target_link_libraries(
     tesseract::tesseract_environment_core
     tesseract::tesseract_environment_ofkt
     tesseract::tesseract_motion_planners_trajopt
-    jsoncpp_lib
+    tesseract::tesseract_monitoring_environment
+    #jsoncpp_lib
     ${rclcpp_LIBRARIES}
     ${tesseract_msgs_LIBRARIES}
-    ${tesseract_monitoring_LIBRARIES}
     ${tesseract_rosutils_LIBRARIES}
     ${tesseract_process_managers_LIBRARIES}
     )
@@ -343,8 +343,6 @@ list(APPEND PACKAGE_FILES ${PROJECT_NAME}_scene_graph_example)
 add_executable(${PROJECT_NAME}_scene_graph_example_node src/scene_graph_example_node.cpp)
 target_link_libraries(${PROJECT_NAME}_scene_graph_example_node
                       ${PROJECT_NAME}_scene_graph_example
-                      ${rclcpp_LIBRARIES}
-                      ${tesseract_monitoring_LIBRARIES}
                       )
 target_compile_options(${PROJECT_NAME}_scene_graph_example_node PRIVATE ${TESSERACT_COMPILE_OPTIONS})
 # target_clang_tidy(${PROJECT_NAME}_scene_graph_example_node ARGUMENTS ${TESSERACT_CLANG_TIDY_ARGS} ENABLE ${TESSERACT_ENABLE_CLANG_TIDY})
@@ -363,7 +361,6 @@ target_include_directories(
     ${rclcpp_INCLUDE_DIRS}
     ${tesseract_monitoring_INCLUDE_DIRS}
     )
-list(APPEND PACKAGE_FILES ${PROJECT_NAME}_scene_graph_example_node)
 
 ament_export_include_directories(include)
 
@@ -391,6 +388,7 @@ ament_export_dependencies(
 ament_export_libraries(${PROJECT_NAME})
 ament_package()
 
+# Install libraries
 install(
     TARGETS ${PACKAGE_FILES}
     EXPORT ${PROJECT_NAME}-targets
@@ -401,6 +399,11 @@ install(
     NAMESPACE tesseract::
     DESTINATION lib/cmake/${PROJECT_NAME}
     )
+
+# Install executable(s)
+install(TARGETS
+   ${PROJECT_NAME}_scene_graph_example_node
+   DESTINATION lib/${PROJECT_NAME})
 
 # Mark cpp header files for installation
 install(DIRECTORY include/${PROJECT_NAME}
