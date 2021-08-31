@@ -1,0 +1,19 @@
+@PACKAGE_INIT@
+
+set(@PROJECT_NAME@_FOUND ON)
+set_and_check(@PROJECT_NAME@_INCLUDE_DIRS "${PACKAGE_PREFIX_DIR}/include")
+set_and_check(@PROJECT_NAME@_LIBRARY_DIRS "${PACKAGE_PREFIX_DIR}/lib")
+
+include(CMakeFindDependencyMacro)
+# Non-ROS packages
+find_package(tesseract_environment REQUIRED)
+find_package(tesseract_command_language REQUIRED)
+find_package(tesseract_motion_planners REQUIRED)
+find_package(tesseract_process_managers REQUIRED)
+find_package(tesseract_common REQUIRED)
+find_package(trajopt_sqp REQUIRED)
+find_package(trajopt_ifopt REQUIRED)
+find_package(ros_industrial_cmake_boilerplate REQUIRED)
+find_package(PCL REQUIRED COMPONENTS core features filters io segmentation surface)
+
+include("${CMAKE_CURRENT_LIST_DIR}/@PROJECT_NAME@-targets.cmake")
