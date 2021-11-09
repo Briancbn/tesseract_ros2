@@ -130,7 +130,7 @@ std::vector<tesseract_msgs::msg::JointState> trajectoryFromCSVFile(const std::st
 
     double val = 0;
     tesseract_common::toNumeric<double>(tokens[cnt], val);
-    js.time_from_start = rclcpp::Duration(val);
+    js.time_from_start = rclcpp::Duration::from_seconds(val);
 
     trajectory.push_back(js);
   }
