@@ -1640,7 +1640,7 @@ void toMsg(std::vector<tesseract_msgs::msg::JointState>& traj_msg, const tessera
     for (int i = 0; i < js.acceleration.size(); ++i)
       js_msg.acceleration[static_cast<size_t>(i)] = js.acceleration(i);
 
-    js_msg.time_from_start = rclcpp::Duration(js.time);
+    js_msg.time_from_start = rclcpp::Duration::from_seconds(js.time);
     traj_msg.push_back(js_msg);
   }
 }
@@ -1762,32 +1762,22 @@ void toMsg(const tesseract_msgs::msg::ContactResult::SharedPtr& contact_result_m
   toMsg(*contact_result_msg, contact_result, stamp);
 }
 
-<<<<<<< HEAD:tesseract_ros/tesseract_rosutils/src/utils.cpp
-bool toMsg(geometry_msgs::msg::PoseArray& pose_array, const tesseract_common::VectorIsometry3d& transforms)
-=======
-tesseract_msgs::KinematicsPluginInfo toMsg(const tesseract_common::KinematicsPluginInfo& info)
->>>>>>> 8b56cfc... Update to Joint and Kinematic group (#125):tesseract_rosutils/src/utils.cpp
+tesseract_msgs::msg::KinematicsPluginInfo toMsg(const tesseract_common::KinematicsPluginInfo& info)
 {
-  tesseract_msgs::KinematicsPluginInfo msg;
+  tesseract_msgs::msg::KinematicsPluginInfo msg;
   msg.search_paths.insert(msg.search_paths.begin(), info.search_paths.begin(), info.search_paths.end());
   msg.search_libraries.insert(msg.search_libraries.begin(), info.search_libraries.begin(), info.search_libraries.end());
   for (const auto& pair : info.fwd_plugin_infos)
   {
-<<<<<<< HEAD:tesseract_ros/tesseract_rosutils/src/utils.cpp
-    geometry_msgs::msg::Pose pose;
-    tf::poseEigenToMsg(transform, pose);
-    pose_array.poses.push_back(pose);
-=======
-    tesseract_msgs::GroupsKinematicPlugins pair_msg;
+    tesseract_msgs::msg::GroupsKinematicPlugins pair_msg;
     pair_msg.group = pair.first;
     pair_msg.plugins = toMsg(pair.second);
     msg.group_fwd_plugins.push_back(pair_msg);
->>>>>>> 8b56cfc... Update to Joint and Kinematic group (#125):tesseract_rosutils/src/utils.cpp
   }
 
   for (const auto& pair : info.inv_plugin_infos)
   {
-    tesseract_msgs::GroupsKinematicPlugins pair_msg;
+    tesseract_msgs::msg::GroupsKinematicPlugins pair_msg;
     pair_msg.group = pair.first;
     pair_msg.plugins = toMsg(pair.second);
     msg.group_inv_plugins.push_back(pair_msg);
@@ -1795,7 +1785,47 @@ tesseract_msgs::KinematicsPluginInfo toMsg(const tesseract_common::KinematicsPlu
   return msg;
 }
 
-<<<<<<< HEAD:tesseract_ros/tesseract_rosutils/src/utils.cpp
+std::vector<tesseract_msgs::msg::StringPluginInfoPair> toMsg(const tesseract_common::PluginInfoMap& info_map)
+{
+  std::vector<tesseract_msgs::msg::StringPluginInfoPair> msg;
+  for (const auto& pair : info_map)
+  {
+    tesseract_msgs::msg::StringPluginInfoPair pair_msg;
+    pair_msg.first = pair.first;
+    pair_msg.second = toMsg(pair.second);
+    msg.push_back(pair_msg);
+  }
+  return msg;
+}
+
+tesseract_msgs::msg::PluginInfo toMsg(const tesseract_common::PluginInfo& info)
+{
+  tesseract_msgs::msg::PluginInfo msg;
+  msg.class_name = info.class_name;
+  msg.is_default = info.is_default;
+
+  if (info.config)
+  {
+    YAML::Emitter out;
+    out << info.config;
+    msg.config = out.c_str();
+  }
+
+  return msg;
+}
+
+bool toMsg(geometry_msgs::msg::PoseArray& pose_array, const tesseract_common::VectorIsometry3d& transforms)
+{
+  for (const auto& transform : transforms)
+  {
+    geometry_msgs::msg::Pose pose;
+    tf::poseEigenToMsg(transform, pose);
+    pose_array.poses.push_back(pose);
+  }
+
+  return true;
+}
+
 tesseract_msgs::msg::ChainGroup toMsg(tesseract_srdf::ChainGroups::const_reference group)
 {
   tesseract_msgs::msg::ChainGroup g;
@@ -1804,105 +1834,6 @@ tesseract_msgs::msg::ChainGroup toMsg(tesseract_srdf::ChainGroups::const_referen
   for (const auto& pair : group.second)
   {
     tesseract_msgs::msg::StringPair chain;
-    chain.first = pair.first;
-    chain.second = pair.second;
-    g.chains.push_back(chain);
-=======
-std::vector<tesseract_msgs::StringPluginInfoPair> toMsg(const tesseract_common::PluginInfoMap& info_map)
-{
-  std::vector<tesseract_msgs::StringPluginInfoPair> msg;
-  for (const auto& pair : info_map)
-  {
-    tesseract_msgs::StringPluginInfoPair pair_msg;
-    pair_msg.first = pair.first;
-    pair_msg.second = toMsg(pair.second);
-    msg.push_back(pair_msg);
->>>>>>> 8b56cfc... Update to Joint and Kinematic group (#125):tesseract_rosutils/src/utils.cpp
-  }
-  return msg;
-}
-
-<<<<<<< HEAD:tesseract_ros/tesseract_rosutils/src/utils.cpp
-tesseract_msgs::msg::GroupsROPKinematics toMsg(tesseract_srdf::GroupROPKinematics::const_reference group)
-{
-  tesseract_msgs::msg::GroupsROPKinematics g;
-  g.name = group.first;
-  g.manipulator_group = group.second.manipulator_group;
-  g.manipulator_ik_solver = group.second.manipulator_ik_solver;
-  g.manipulator_reach = group.second.manipulator_reach;
-  g.positioner_group = group.second.positioner_group;
-  g.positioner_fk_solver = group.second.positioner_fk_solver;
-=======
-tesseract_msgs::PluginInfo toMsg(const tesseract_common::PluginInfo& info)
-{
-  tesseract_msgs::PluginInfo msg;
-  msg.class_name = info.class_name;
-  msg.is_default = info.is_default;
->>>>>>> 8b56cfc... Update to Joint and Kinematic group (#125):tesseract_rosutils/src/utils.cpp
-
-  if (info.config)
-  {
-<<<<<<< HEAD:tesseract_ros/tesseract_rosutils/src/utils.cpp
-    tesseract_msgs::msg::StringDoublePair jp;
-    jp.first = js.first;
-    jp.second = js.second;
-    g.positioner_sample_resolution.push_back(jp);
-=======
-    YAML::Emitter out;
-    out << info.config;
-    msg.config = out.c_str();
->>>>>>> 8b56cfc... Update to Joint and Kinematic group (#125):tesseract_rosutils/src/utils.cpp
-  }
-
-  return msg;
-}
-
-<<<<<<< HEAD:tesseract_ros/tesseract_rosutils/src/utils.cpp
-tesseract_msgs::msg::GroupsREPKinematics toMsg(tesseract_srdf::GroupREPKinematics::const_reference group)
-{
-  tesseract_msgs::msg::GroupsREPKinematics g;
-  g.name = group.first;
-  g.manipulator_group = group.second.manipulator_group;
-  g.manipulator_ik_solver = group.second.manipulator_ik_solver;
-  g.manipulator_reach = group.second.manipulator_reach;
-  g.positioner_group = group.second.positioner_group;
-  g.positioner_fk_solver = group.second.positioner_fk_solver;
-
-  g.positioner_sample_resolution.reserve(group.second.positioner_sample_resolution.size());
-  for (const auto& js : group.second.positioner_sample_resolution)
-  {
-    tesseract_msgs::msg::StringDoublePair jp;
-    jp.first = js.first;
-    jp.second = js.second;
-    g.positioner_sample_resolution.push_back(jp);
-=======
-bool toMsg(geometry_msgs::PoseArray& pose_array, const tesseract_common::VectorIsometry3d& transforms)
-{
-  for (const auto& transform : transforms)
-  {
-    geometry_msgs::Pose pose;
-    tf::poseEigenToMsg(transform, pose);
-    pose_array.poses.push_back(pose);
->>>>>>> 8b56cfc... Update to Joint and Kinematic group (#125):tesseract_rosutils/src/utils.cpp
-  }
-
-  return true;
-}
-
-<<<<<<< HEAD:tesseract_ros/tesseract_rosutils/src/utils.cpp
-tesseract_msgs::msg::GroupsOPWKinematics toMsg(tesseract_srdf::GroupOPWKinematics::const_reference group)
-{
-  tesseract_msgs::msg::GroupsOPWKinematics g;
-=======
-tesseract_msgs::ChainGroup toMsg(tesseract_srdf::ChainGroups::const_reference group)
-{
-  tesseract_msgs::ChainGroup g;
->>>>>>> 8b56cfc... Update to Joint and Kinematic group (#125):tesseract_rosutils/src/utils.cpp
-  g.name = group.first;
-  g.chains.reserve(group.second.size());
-  for (const auto& pair : group.second)
-  {
-    tesseract_msgs::StringPair chain;
     chain.first = pair.first;
     chain.second = pair.second;
     g.chains.push_back(chain);
@@ -1952,30 +1883,8 @@ tesseract_msgs::msg::GroupsTCPs toMsg(tesseract_srdf::GroupTCPs::const_reference
 
 bool toMsg(tesseract_msgs::msg::KinematicsInformation& kin_info_msg, const tesseract_srdf::KinematicsInformation& kin_info)
 {
-<<<<<<< HEAD:tesseract_ros/tesseract_rosutils/src/utils.cpp
-  kin_info_msg.group_names = kin_info.group_names;
-
-  kin_info_msg.default_fwd_kin.reserve(kin_info.group_default_fwd_kin.size());
-  for (const auto& group : kin_info.group_default_fwd_kin)
-  {
-    tesseract_msgs::msg::StringPair pair;
-    pair.first = group.first;
-    pair.second = group.second;
-    kin_info_msg.default_fwd_kin.push_back(pair);
-  }
-
-  kin_info_msg.default_inv_kin.reserve(kin_info.group_default_inv_kin.size());
-  for (const auto& group : kin_info.group_default_inv_kin)
-  {
-    tesseract_msgs::msg::StringPair pair;
-    pair.first = group.first;
-    pair.second = group.second;
-    kin_info_msg.default_inv_kin.push_back(pair);
-  }
-=======
   kin_info_msg.group_names.insert(
       kin_info_msg.group_names.end(), kin_info.group_names.begin(), kin_info.group_names.end());
->>>>>>> 8b56cfc... Update to Joint and Kinematic group (#125):tesseract_rosutils/src/utils.cpp
 
   kin_info_msg.chain_groups.reserve(kin_info.chain_groups.size());
   for (const auto& group : kin_info.chain_groups)
@@ -2081,10 +1990,7 @@ bool fromMsg(tesseract_srdf::KinematicsInformation& kin_info, const tesseract_ms
   return true;
 }
 
-<<<<<<< HEAD:tesseract_ros/tesseract_rosutils/src/utils.cpp
-bool toMsg(tesseract_msgs::msg::TransformMap& transform_map_msg, const tesseract_common::TransformMap& transform_map)
-=======
-tesseract_common::KinematicsPluginInfo fromMsg(const tesseract_msgs::KinematicsPluginInfo& info_msg)
+tesseract_common::KinematicsPluginInfo fromMsg(const tesseract_msgs::msg::KinematicsPluginInfo& info_msg)
 {
   tesseract_common::KinematicsPluginInfo info;
   info.search_paths.insert(info_msg.search_paths.begin(), info_msg.search_paths.end());
@@ -2099,7 +2005,7 @@ tesseract_common::KinematicsPluginInfo fromMsg(const tesseract_msgs::KinematicsP
   return info;
 }
 
-tesseract_common::PluginInfoMap fromMsg(const std::vector<tesseract_msgs::StringPluginInfoPair>& info_map_msg)
+tesseract_common::PluginInfoMap fromMsg(const std::vector<tesseract_msgs::msg::StringPluginInfoPair>& info_map_msg)
 {
   tesseract_common::PluginInfoMap info_map;
   for (const auto& pair : info_map_msg)
@@ -2108,7 +2014,7 @@ tesseract_common::PluginInfoMap fromMsg(const std::vector<tesseract_msgs::String
   return info_map;
 }
 
-tesseract_common::PluginInfo fromMsg(const tesseract_msgs::PluginInfo& info_msg)
+tesseract_common::PluginInfo fromMsg(const tesseract_msgs::msg::PluginInfo& info_msg)
 {
   tesseract_common::PluginInfo info;
   info.class_name = info_msg.class_name;
@@ -2120,8 +2026,7 @@ tesseract_common::PluginInfo fromMsg(const tesseract_msgs::PluginInfo& info_msg)
   return info;
 }
 
-bool toMsg(tesseract_msgs::TransformMap& transform_map_msg, const tesseract_common::TransformMap& transform_map)
->>>>>>> 8b56cfc... Update to Joint and Kinematic group (#125):tesseract_rosutils/src/utils.cpp
+bool toMsg(tesseract_msgs::msg::TransformMap& transform_map_msg, const tesseract_common::TransformMap& transform_map)
 {
   transform_map_msg.names.reserve(transform_map.size());
   transform_map_msg.transforms.reserve(transform_map.size());
@@ -2266,15 +2171,13 @@ tesseract_planning::TaskInfo::Ptr fromMsg(const tesseract_msgs::msg::TaskInfo& t
   return task_info;
 }
 
-<<<<<<< HEAD:tesseract_ros/tesseract_rosutils/src/utils.cpp
-=======
-trajectory_msgs::JointTrajectory toMsg(const tesseract_common::JointTrajectory& joint_trajectory,
-                                       const tesseract_scene_graph::SceneState& initial_state)
+trajectory_msgs::msg::JointTrajectory toMsg(const tesseract_common::JointTrajectory& joint_trajectory,
+                                            const tesseract_scene_graph::SceneState& initial_state)
 {
-  trajectory_msgs::JointTrajectory result;
+  trajectory_msgs::msg::JointTrajectory result;
   std::vector<std::string> joint_names;
   std::map<std::string, int> joint_names_indices;
-  trajectory_msgs::JointTrajectoryPoint last_point;
+  trajectory_msgs::msg::JointTrajectoryPoint last_point;
   for (auto joint_state : joint_trajectory)
   {
     for (auto joint : joint_state.joint_names)
@@ -2290,15 +2193,15 @@ trajectory_msgs::JointTrajectory toMsg(const tesseract_common::JointTrajectory& 
   last_point.positions =
       std::vector<double>(initial_points.data(), initial_points.data() + initial_points.rows() * initial_points.cols());
   result.joint_names = joint_names;
-  std::vector<trajectory_msgs::JointTrajectoryPoint> points;
+  std::vector<trajectory_msgs::msg::JointTrajectoryPoint> points;
   for (unsigned long i = 0; i < joint_trajectory.size(); i++)
   {
-    trajectory_msgs::JointTrajectoryPoint current_point;
+    trajectory_msgs::msg::JointTrajectoryPoint current_point;
     current_point.positions = last_point.positions;
     current_point.velocities = std::vector<double>(joint_names.size(), 0);
     current_point.accelerations = std::vector<double>(joint_names.size(), 0);
     current_point.effort = std::vector<double>(joint_names.size(), 0);
-    current_point.time_from_start = ros::Duration(joint_trajectory[i].time);
+    current_point.time_from_start = rclcpp::Duration::from_seconds(joint_trajectory[i].time);
     for (Eigen::Index j = 0; j < static_cast<Eigen::Index>(joint_trajectory[i].joint_names.size()); j++)
     {
       auto joint_index =
@@ -2319,5 +2222,4 @@ trajectory_msgs::JointTrajectory toMsg(const tesseract_common::JointTrajectory& 
   return result;
 }
 
->>>>>>> 8b56cfc... Update to Joint and Kinematic group (#125):tesseract_rosutils/src/utils.cpp
 }  // namespace tesseract_rosutils
