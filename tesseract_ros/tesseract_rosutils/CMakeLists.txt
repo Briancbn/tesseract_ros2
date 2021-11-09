@@ -7,11 +7,12 @@ find_package(ament_index_cpp REQUIRED)
 find_package(tesseract_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 
-#find_package(tf2 REQUIRED)
-#find_package(tf2_ros REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
 find_package(tf2_eigen REQUIRED)
 
 # Non-ROS packages
+find_package(ros_industrial_cmake_boilerplate REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(tesseract_environment REQUIRED)
 find_package(tesseract_scene_graph REQUIRED)
@@ -23,18 +24,14 @@ find_package(tesseract_visualization REQUIRED)
 find_package(tesseract_common REQUIRED)
 find_package(tesseract_motion_planners REQUIRED)
 find_package(tesseract_process_managers REQUIRED)
-<<<<<<< HEAD:tesseract_ros/tesseract_rosutils/CMakeLists.txt
-find_package(visualization_msgs REQUIRED)
-=======
-find_package(yaml-cpp REQUIRED)
->>>>>>> 8b56cfc... Update to Joint and Kinematic group (#125):tesseract_rosutils/CMakeLists.txt
+find_package(yaml_cpp_vendor REQUIRED)
 
-list(FIND CMAKE_CXX_COMPILE_FEATURES cxx_std_17 CXX_FEATURE_FOUND)
+# Load variable for clang tidy args, compiler options and cxx version
+tesseract_variables()
 
 add_library(${PROJECT_NAME} SHARED src/plotting.cpp src/conversions.cpp src/utils.cpp)
-target_link_libraries(${PROJECT_NAME} PUBLIC
-    tesseract::tesseract_environment_core
-    tesseract::tesseract_environment_ofkt
+target_link_libraries(${PROJECT_NAME}
+    tesseract::tesseract_environment
     tesseract::tesseract_scene_graph
     tesseract::tesseract_srdf
     tesseract::tesseract_geometry
@@ -44,42 +41,66 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     tesseract::tesseract_motion_planners_core
     tesseract::tesseract_process_managers
     tesseract::tesseract_command_language
-    #Eigen3::Eigen
     ${rclcpp_LIBRARIES}
-    #${tesseract_msgs_LIBRARIES}
-    #${geometry_msgs_LIBRARIES}
     ${ament_index_cpp_LIBRARIES}
-    #${tf2_eigen_LIBRARIES}
-    #${tf2_LIBRARIES}
-    #${tf2_ros_LIBRARIES}
-    #${visualization_msgs_LIBRARIES}
     ${Boost_LIBRARIES}
-    )
+)
 
 target_compile_options(${PROJECT_NAME} PRIVATE ${TESSERACT_COMPILE_OPTIONS})
-#target_compile_options(${PROJECT_NAME} INTERFACE -Wall -Wextra -Wsuggest-override -Wconversion -Wsign-conversion)
-if(CXX_FEATURE_FOUND EQUAL "-1")
-    target_compile_options(${PROJECT_NAME} PUBLIC -std=c++17)
-else()
-    target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
-endif()
+target_clang_tidy(${PROJECT_NAME} ARGUMENTS ${TESSERACT_CLANG_TIDY_ARGS} ENABLE ${TESSERACT_ENABLE_CLANG_TIDY})
+target_cxx_version(${PROJECT_NAME} PUBLIC VERSION 17)
 target_include_directories(${PROJECT_NAME} PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-    "$<INSTALL_INTERFACE:include>"
-    )
+    "$<INSTALL_INTERFACE:include>")
 target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC
-    ${rclcpp_INCLUDE_DIRS}
     ${EIGEN3_INCLUDE_DIRS}
-    ${Boost_INCLUDE_DIRS}
-    ${tesseract_msgs_INCLUDE_DIRS}
-    )
+    ${Boost_INCLUDE_DIRS})
+
+ament_target_dependencies(${PROJECT_NAME}
+    tesseract_msgs
+    rclcpp
+    tf2
+    tf2_eigen
+    tf2_ros
+    geometry_msgs
+    yaml_cpp_vendor
+    std_msgs
+)
 
 list (APPEND PACKAGE_LIBRARIES ${PROJECT_NAME})
+install(TARGETS ${PACKAGE_LIBRARIES} EXPORT ${PROJECT_NAME}-targets DESTINATION lib)
+install(EXPORT ${PROJECT_NAME}-targets NAMESPACE tesseract:: DESTINATION lib/cmake/${PROJECT_NAME})
+
+# Mark cpp header files for installation
+install(DIRECTORY include/${PROJECT_NAME}
+  DESTINATION include
+  FILES_MATCHING PATTERN "*.h"
+  PATTERN ".svn" EXCLUDE
+)
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  find_package(GTest REQUIRED)
+  find_package(tesseract_support REQUIRED)
+
+  ament_add_gtest(${PROJECT_NAME}_unit test/tesseract_rosutils_unit.cpp)
+  target_link_libraries(${PROJECT_NAME}_unit
+    GTest::GTest
+    GTest::Main
+    tesseract::tesseract_support
+    ${PROJECT_NAME}
+  )
+  target_clang_tidy(${PROJECT_NAME}_unit ARGUMENTS ${TESSERACT_CLANG_TIDY_ARGS} ENABLE ${TESSERACT_ENABLE_CLANG_TIDY})
+  target_cxx_version(${PROJECT_NAME}_unit PUBLIC VERSION 17)
+  target_include_directories(${PROJECT_NAME}_unit PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+      "$<INSTALL_INTERFACE:include>")
+  target_include_directories(${PROJECT_NAME}_unit SYSTEM PRIVATE
+      ${EIGEN3_INCLUDE_DIRS})
+endif()
 
 ament_export_dependencies(
-    EIGEN3
     tesseract_msgs
-    visualization_msgs
     rclcpp
     tesseract_environment
     tesseract_scene_graph
@@ -90,88 +111,13 @@ ament_export_dependencies(
     tesseract_common
     tesseract_motion_planners
     tesseract_process_managers
-<<<<<<< HEAD:tesseract_ros/tesseract_rosutils/CMakeLists.txt
     tesseract_command_language
-    )
+    yaml_cpp_vendor
+)
 
 ament_export_include_directories(
     include
-=======
-    yaml-cpp
 )
-
-# Load variable for clang tidy args, compiler options and cxx version
-tesseract_variables()
-
-add_library(${PROJECT_NAME} SHARED src/plotting.cpp src/conversions.cpp src/utils.cpp)
-target_link_libraries(${PROJECT_NAME} PUBLIC
-  tesseract::tesseract_environment
-  tesseract::tesseract_scene_graph
-  tesseract::tesseract_srdf
-  tesseract::tesseract_geometry
-  tesseract::tesseract_collision_core
-  tesseract::tesseract_visualization
-  tesseract::tesseract_common
-  tesseract::tesseract_motion_planners_core
-  tesseract::tesseract_process_managers
-  tesseract::tesseract_command_language
-  yaml-cpp
-  ${Boost_LIBRARIES}
-  ${catkin_LIBRARIES})
-target_compile_options(${PROJECT_NAME} PRIVATE ${TESSERACT_COMPILE_OPTIONS})
-target_clang_tidy(${PROJECT_NAME} ARGUMENTS ${TESSERACT_CLANG_TIDY_ARGS} ENABLE ${TESSERACT_ENABLE_CLANG_TIDY})
-target_cxx_version(${PROJECT_NAME} PUBLIC VERSION 17)
-target_include_directories(${PROJECT_NAME} PUBLIC
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-    "$<INSTALL_INTERFACE:include>")
-target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC
-    ${catkin_INCLUDE_DIRS}
->>>>>>> 8b56cfc... Update to Joint and Kinematic group (#125):tesseract_rosutils/CMakeLists.txt
-    ${EIGEN3_INCLUDE_DIRS}
-    )
 
 ament_package()
 
-install(TARGETS ${PACKAGE_LIBRARIES} EXPORT ${PROJECT_NAME}-targets DESTINATION lib)
-install(EXPORT ${PROJECT_NAME}-targets NAMESPACE tesseract:: DESTINATION lib/cmake/${PROJECT_NAME})
-
-# Mark cpp header files for installation
-install(DIRECTORY include/${PROJECT_NAME}
-  DESTINATION include
-  FILES_MATCHING PATTERN "*.h"
-  PATTERN ".svn" EXCLUDE
- )
-
-# Create cmake config files
-include(CMakePackageConfigHelpers)
-configure_package_config_file(${CMAKE_CURRENT_LIST_DIR}/cmake/${PROJECT_NAME}-config.cmake.in
-  ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake
-  INSTALL_DESTINATION lib/cmake/${PROJECT_NAME}
-  NO_CHECK_REQUIRED_COMPONENTS_MACRO)
-
-write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config-version.cmake
-  VERSION ${PROJECT_VERSION} COMPATIBILITY ExactVersion)
-
-install(FILES
-  "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
-  "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config-version.cmake"
-  DESTINATION lib/cmake/${PROJECT_NAME})
-
-export(EXPORT ${PROJECT_NAME}-targets FILE ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-targets.cmake)
-
-if(BUILD_TESTING)
-  find_package(ament_cmake_gtest REQUIRED)
-  find_package(GTest REQUIRED)
-  find_package(tesseract_support REQUIRED)
-
-  ament_add_gtest(${PROJECT_NAME}_unit test/tesseract_rosutils_unit.cpp)
-  target_link_libraries(${PROJECT_NAME}_unit GTest::GTest GTest::Main tesseract::tesseract_support ${PROJECT_NAME})
-	if(CXX_FEATURE_FOUND EQUAL "-1")
-            target_compile_options(${PROJECT_NAME}_unit PRIVATE -std=c++17)
-	else()
-            target_compile_features(${PROJECT_NAME}_unit PRIVATE cxx_std_17)
-	endif()
-  target_include_directories(${PROJECT_NAME}_unit PRIVATE
-      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-      "$<INSTALL_INTERFACE:include>")
-endif()
