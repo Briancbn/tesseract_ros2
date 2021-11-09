@@ -23,7 +23,11 @@ find_package(tesseract_visualization REQUIRED)
 find_package(tesseract_common REQUIRED)
 find_package(tesseract_motion_planners REQUIRED)
 find_package(tesseract_process_managers REQUIRED)
+<<<<<<< HEAD:tesseract_ros/tesseract_rosutils/CMakeLists.txt
 find_package(visualization_msgs REQUIRED)
+=======
+find_package(yaml-cpp REQUIRED)
+>>>>>>> 8b56cfc... Update to Joint and Kinematic group (#125):tesseract_rosutils/CMakeLists.txt
 
 list(FIND CMAKE_CXX_COMPILE_FEATURES cxx_std_17 CXX_FEATURE_FOUND)
 
@@ -86,11 +90,43 @@ ament_export_dependencies(
     tesseract_common
     tesseract_motion_planners
     tesseract_process_managers
+<<<<<<< HEAD:tesseract_ros/tesseract_rosutils/CMakeLists.txt
     tesseract_command_language
     )
 
 ament_export_include_directories(
     include
+=======
+    yaml-cpp
+)
+
+# Load variable for clang tidy args, compiler options and cxx version
+tesseract_variables()
+
+add_library(${PROJECT_NAME} SHARED src/plotting.cpp src/conversions.cpp src/utils.cpp)
+target_link_libraries(${PROJECT_NAME} PUBLIC
+  tesseract::tesseract_environment
+  tesseract::tesseract_scene_graph
+  tesseract::tesseract_srdf
+  tesseract::tesseract_geometry
+  tesseract::tesseract_collision_core
+  tesseract::tesseract_visualization
+  tesseract::tesseract_common
+  tesseract::tesseract_motion_planners_core
+  tesseract::tesseract_process_managers
+  tesseract::tesseract_command_language
+  yaml-cpp
+  ${Boost_LIBRARIES}
+  ${catkin_LIBRARIES})
+target_compile_options(${PROJECT_NAME} PRIVATE ${TESSERACT_COMPILE_OPTIONS})
+target_clang_tidy(${PROJECT_NAME} ARGUMENTS ${TESSERACT_CLANG_TIDY_ARGS} ENABLE ${TESSERACT_ENABLE_CLANG_TIDY})
+target_cxx_version(${PROJECT_NAME} PUBLIC VERSION 17)
+target_include_directories(${PROJECT_NAME} PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    "$<INSTALL_INTERFACE:include>")
+target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC
+    ${catkin_INCLUDE_DIRS}
+>>>>>>> 8b56cfc... Update to Joint and Kinematic group (#125):tesseract_rosutils/CMakeLists.txt
     ${EIGEN3_INCLUDE_DIRS}
     )
 

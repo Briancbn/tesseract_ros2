@@ -19,6 +19,11 @@
   <depend>tesseract_common</depend>
   <depend>tesseract_motion_planners</depend>
   <depend>tesseract_process_managers</depend>
+<<<<<<< HEAD:tesseract_ros/tesseract_rosutils/package.xml
+=======
+  <depend>tesseract_srdf</depend>
+  <depend>yaml-cpp</depend>
+>>>>>>> 8b56cfc... Update to Joint and Kinematic group (#125):tesseract_rosutils/package.xml
 
   <depend>visualization_msgs</depend>
   <depend>geometry_msgs</depend>
