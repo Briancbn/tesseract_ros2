@@ -86,15 +86,24 @@ TESSERACT_COMMON_IGNORE_WARNINGS_POP
 #include <tesseract_common/joint_state.h>
 #include <tesseract_motion_planners/core/types.h>
 #include <tesseract_process_managers/core/task_info.h>
+#include <tesseract_support/tesseract_support_resource_locator.h>
 
 namespace tesseract_rosutils
 {
 std::string locateResource(const std::string& url);
 
-class ROSResourceLocator : public tesseract_common::SimpleResourceLocator
+class ROSResourceLocator : public tesseract_common::ResourceLocator
 {
 public:
-  ROSResourceLocator();
+  using Ptr = std::shared_ptr<ROSResourceLocator>;
+  using ConstPtr = std::shared_ptr<const ROSResourceLocator>;
+
+  std::shared_ptr<tesseract_common::Resource> locateResource(const std::string& url) const override final;
+
+private:
+  friend class boost::serialization::access;
+  template <class Archive>
+  void serialize(Archive& ar, const unsigned int version);  // NOLINT
 };
 
 bool isMsgEmpty(const sensor_msgs::msg::JointState& msg);
@@ -491,5 +500,9 @@ inline MessageType fromFile(const std::string& filepath)
 }
 
 }  // namespace tesseract_rosutils
+
+#include <boost/serialization/export.hpp>
+#include <boost/serialization/tracking.hpp>
+BOOST_CLASS_EXPORT_KEY2(tesseract_rosutils::ROSResourceLocator, "ROSResourceLocator")
 
 #endif

@@ -35,13 +35,13 @@ TESSERACT_COMMON_IGNORE_WARNINGS_PUSH
 
 TESSERACT_COMMON_IGNORE_WARNINGS_POP
 
-#include <tesseract_command_language/core/serialization.h>
+#include <tesseract_common/serialization.h>
 #include <tesseract_rosutils/utils.h>
 
 const std::string LOGGER_ID{ "tesseract_rosutils_utils" };
 namespace tesseract_rosutils
 {
-std::string locateResource(const std::string& url)
+std::shared_ptr<tesseract_common::Resource> ROSResourceLocator::locateResource(const std::string& url) const
 {
   std::string mod_url = url;
   if (url.find("package://") == 0)
@@ -49,18 +49,14 @@ std::string locateResource(const std::string& url)
     mod_url.erase(0, strlen("package://"));
     size_t pos = mod_url.find('/');
     if (pos == std::string::npos)
-    {
-      return std::string();
-    }
+      return nullptr;
 
     std::string package = mod_url.substr(0, pos);
     mod_url.erase(0, pos);
     std::string package_path = ament_index_cpp::get_package_share_directory(package);
 
     if (package_path.empty())
-    {
-      return std::string();
-    }
+      return nullptr;
 
     mod_url = package_path + mod_url;
   }
@@ -69,15 +65,21 @@ std::string locateResource(const std::string& url)
     mod_url.erase(0, strlen("file://"));
     size_t pos = mod_url.find('/');
     if (pos == std::string::npos)
-    {
-      return std::string();
-    }
+      return nullptr;
   }
 
-  return mod_url;
+  if (!tesseract_common::fs::path(mod_url).is_complete())
+    return nullptr;
+
+  return std::make_shared<tesseract_common::SimpleLocatedResource>(
+      url, mod_url, std::make_shared<ROSResourceLocator>(*this));
 }
 
-ROSResourceLocator::ROSResourceLocator() : SimpleResourceLocator(::tesseract_rosutils::locateResource) {}
+template <class Archive>
+void ROSResourceLocator::serialize(Archive& ar, const unsigned int /*version*/)
+{
+  ar& BOOST_SERIALIZATION_BASE_OBJECT_NVP(tesseract_common::ResourceLocator);
+}
 
 bool isMsgEmpty(const sensor_msgs::msg::JointState& msg)
 {
@@ -2172,10 +2174,14 @@ bool toMsg(tesseract_msgs::msg::TaskInfo& task_info_msg, tesseract_planning::Tas
   task_info_msg.unique_id = task_info->unique_id;
   task_info_msg.task_name = task_info->task_name;
   task_info_msg.message = task_info->message;
-  task_info_msg.instructions_input = Serialization::toArchiveStringXML<Instruction>(task_info->instructions_input);
-  task_info_msg.instructions_output = Serialization::toArchiveStringXML<Instruction>(task_info->instructions_output);
-  task_info_msg.results_input = Serialization::toArchiveStringXML<Instruction>(task_info->results_input);
-  task_info_msg.results_output = Serialization::toArchiveStringXML<Instruction>(task_info->results_output);
+  task_info_msg.instructions_input =
+      tesseract_common::Serialization::toArchiveStringXML<Instruction>(task_info->instructions_input);
+  task_info_msg.instructions_output =
+      tesseract_common::Serialization::toArchiveStringXML<Instruction>(task_info->instructions_output);
+  task_info_msg.results_input =
+      tesseract_common::Serialization::toArchiveStringXML<Instruction>(task_info->results_input);
+  task_info_msg.results_output =
+      tesseract_common::Serialization::toArchiveStringXML<Instruction>(task_info->results_output);
   return toMsg(task_info_msg.environment, task_info->environment);
 }
 
@@ -2186,10 +2192,14 @@ tesseract_planning::TaskInfo::Ptr fromMsg(const tesseract_msgs::msg::TaskInfo& t
   task_info->return_value = task_info_msg.return_value;
   task_info->task_name = task_info_msg.task_name;
   task_info->message = task_info_msg.message;
-  task_info->instructions_input = Serialization::fromArchiveStringXML<Instruction>(task_info_msg.instructions_input);
-  task_info->instructions_output = Serialization::fromArchiveStringXML<Instruction>(task_info_msg.instructions_output);
-  task_info->results_input = Serialization::fromArchiveStringXML<Instruction>(task_info_msg.results_input);
-  task_info->results_output = Serialization::fromArchiveStringXML<Instruction>(task_info_msg.results_output);
+  task_info->instructions_input =
+      tesseract_common::Serialization::fromArchiveStringXML<Instruction>(task_info_msg.instructions_input);
+  task_info->instructions_output =
+      tesseract_common::Serialization::fromArchiveStringXML<Instruction>(task_info_msg.instructions_output);
+  task_info->results_input =
+      tesseract_common::Serialization::fromArchiveStringXML<Instruction>(task_info_msg.results_input);
+  task_info->results_output =
+      tesseract_common::Serialization::fromArchiveStringXML<Instruction>(task_info_msg.results_output);
   task_info->environment = fromMsg(task_info_msg.environment);
 
   return task_info;
@@ -2247,3 +2257,7 @@ trajectory_msgs::msg::JointTrajectory toMsg(const tesseract_common::JointTraject
 }
 
 }  // namespace tesseract_rosutils
+
+#include <tesseract_common/serialization.h>
+TESSERACT_SERIALIZE_ARCHIVES_INSTANTIATE(tesseract_rosutils::ROSResourceLocator)
+BOOST_CLASS_EXPORT_IMPLEMENT(tesseract_rosutils::ROSResourceLocator)
