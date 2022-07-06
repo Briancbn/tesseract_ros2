@@ -3,6 +3,10 @@ repositories:
     type: git
     url: https://github.com/swri-robotics/descartes_light.git
     version: 0.3.0
+  fcl:
+    type: git
+    url: https://github.com/flexible-collision-library/fcl.git
+    version: 0.6.1
   ifopt:
     type: git
     url: https://github.com/ethz-adrl/ifopt.git
